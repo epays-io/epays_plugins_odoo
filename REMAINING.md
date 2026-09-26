@@ -29,9 +29,9 @@ The addon relies on these ePays v2 changes, which exist only on the development 
 - [ ] **Google Pay**, **Samsung Pay** and **Tabby**.
 - [ ] A **declined** payment, then a successful retry, on a real gateway.
 - [ ] The **QA site** `qa-erp.qissah-bh.com`:
-  - [ ] Confirm it runs Odoo **18.0**.
-  - [ ] Install the addon, set it to Test with sandbox keys, run the checkout end to end.
-  - [ ] A portal invoice payment and a payment link.
+  - [x] Confirm it runs Odoo **18.0**.
+  - [x] Install the addon, set it to Test with sandbox keys, run the checkout end to end.
+  - [x] A portal invoice payment and a payment link.
   - [ ] An order in another currency (converted to BHD).
 
 ## 3. Publish on the Odoo Apps Store
