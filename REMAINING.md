@@ -25,9 +25,8 @@ testing it with real payment methods.
       the scan publishes the listing without a manifest error.
 - [x] Add **screenshots** to `payment_epays/static/description/` (provider form, checkout,
       payment step after a decline) and reference them in `index.html`.
-- [ ] Choose the first public version: keep `18.0.1.0.3`, or restart at `18.0.1.0.0` and remove
-      the development migrations (`migrations/18.0.1.0.1`, `18.0.1.0.3`), which only matter to
-      databases that installed the development builds.
+- [x] Choose the first public version: `18.0.1.0.3`, as published on the store; the migrations
+      `18.0.1.0.1` and `18.0.1.0.3` stay.
 - [ ] Download the zip from the store and install it on a fresh Odoo 18.
 
 ## 3. Onboard each merchant (ePays side)
