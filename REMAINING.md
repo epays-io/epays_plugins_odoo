@@ -21,7 +21,7 @@ testing it with real payment methods.
 
 ## 2. Publish on the Odoo Apps Store
 
-- [ ] Register the GitHub repository (`ssh://git@github.com/epays-io/epays_plugins_odoo#18.0`) and check that
+- [x] Register the GitHub repository (`ssh://git@github.com/epays-io/epays_plugins_odoo#18.0`) and check that
       the scan publishes the listing without a manifest error.
 - [x] Add **screenshots** to `payment_epays/static/description/` (provider form, checkout,
       payment step after a decline) and reference them in `index.html`.
