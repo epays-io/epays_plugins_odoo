@@ -9,14 +9,15 @@ testing it with real payment methods.
 
 - [ ] **Addon repository** (`D:\GitHub\epays-odoo`, branch `18.0`), pushed to
       <https://github.com/epays-io/epays_plugins_odoo>.
-  - [x] First commit (`b48d7b4`).
+  - [x] First commit (`fb77586`).
   - [x] Push the `18.0` branch to `epays-io/epays_plugins_odoo`.
-  - [ ] Make `18.0` the default branch on GitHub. The repository's `master` holds only an
-        unrelated "Initial commit" (`.gitattributes`); delete it once `18.0` is the default.
+  - [x] Make `18.0` the default branch on GitHub.
+  - [ ] Delete the `master` branch on GitHub: it holds only an unrelated "Initial commit"
+        (`.gitattributes`).
   - [x] Replace the `<org>/epays-odoo` placeholders in `README.md` (clone and submodule URLs,
         folder names) with `epays-io/epays_plugins_odoo`.
-  - [ ] Check that the CI workflow (`.github/workflows/ci.yml`: lint + tests in two configurations)
-        passes on GitHub.
+  - [x] Check that the CI workflow (`.github/workflows/ci.yml`: lint + tests in two configurations)
+        passes on GitHub: green on `fbe636c` (116 tests alone, 121 with sale and accounting).
 - [ ] **ePays repository** (`D:\GitHub\epays_api_dotnet`, branch `feature/odoo-payment-provider`):
       30 changed files, uncommitted.
   - [ ] Run the full gate first: `.\ci-local.ps1` (Release, `-warnaserror`, full suite).
