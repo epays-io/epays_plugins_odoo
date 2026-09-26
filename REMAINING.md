@@ -38,9 +38,8 @@ The addon relies on these ePays v2 changes, which exist only on the development 
 
 - [ ] Register the GitHub repository (`ssh://git@github.com/epays-io/epays_plugins_odoo#18.0`) and check that
       the scan publishes the listing without a manifest error.
-- [ ] Add **screenshots** to `payment_epays/static/description/` (provider form, checkout,
-      payment step after a decline) and reference them in `index.html`. Only the icon and the
-      banner exist today.
+- [x] Add **screenshots** to `payment_epays/static/description/` (provider form, checkout,
+      payment step after a decline) and reference them in `index.html`.
 - [ ] Choose the first public version: keep `18.0.1.0.3`, or restart at `18.0.1.0.0` and remove
       the development migrations (`migrations/18.0.1.0.1`, `18.0.1.0.3`), which only matter to
       databases that installed the development builds.
