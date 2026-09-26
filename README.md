@@ -1,4 +1,4 @@
-# epays-odoo
+# epays_plugins_odoo
 
 The ePays payment provider for **Odoo 18.0** (Community and Enterprise): customers pay on the ePays
 hosted payment page from the Odoo shop, the customer portal and payment links, and Odoo checks
@@ -38,14 +38,14 @@ ls /opt/odoo/custom-addons/payment_epays/__manifest__.py    # must exist
 Or from this repository:
 
 ```sh
-sudo git clone --branch 18.0 --depth 1 https://github.com/<org>/epays-odoo.git /opt/odoo/epays-odoo
-sudo chown -R odoo:odoo /opt/odoo/epays-odoo
+sudo git clone --branch 18.0 --depth 1 https://github.com/epays-io/epays_plugins_odoo.git /opt/odoo/epays_plugins_odoo
+sudo chown -R odoo:odoo /opt/odoo/epays_plugins_odoo
 ```
 
 ### 2. Add the folder to the addons path
 
 Edit `/etc/odoo/odoo.conf` and append the folder that **contains** `payment_epays`
-(`/opt/odoo/custom-addons`, or `/opt/odoo/epays-odoo` for a clone) to `addons_path`. Behind a
+(`/opt/odoo/custom-addons`, or `/opt/odoo/epays_plugins_odoo` for a clone) to `addons_path`. Behind a
 reverse proxy (nginx, a load balancer), also enable `proxy_mode`:
 
 ```ini
@@ -117,7 +117,7 @@ git push
 ```
 
 Or keep it as a submodule that follows this repository:
-`git submodule add -b 18.0 https://github.com/<org>/epays-odoo.git epays-odoo`. When the build is
+`git submodule add -b 18.0 https://github.com/epays-io/epays_plugins_odoo.git epays_plugins_odoo`. When the build is
 ready, install **ePays** from *Apps* on that branch, test it, then merge into production. Staging
 builds are neutralised: their ePays master keys are cleared, so enter sandbox keys there.
 
@@ -166,7 +166,7 @@ sudo chown -R odoo:odoo /opt/odoo/custom-addons/payment_epays
 **Linux, from a clone** of this repository:
 
 ```sh
-sudo -u odoo git -C /opt/odoo/epays-odoo pull
+sudo -u odoo git -C /opt/odoo/epays_plugins_odoo pull
 ```
 
 **Docker**, replace the folder mounted on `/mnt/extra-addons`:
@@ -191,7 +191,7 @@ git rm -r -q payment_epays && unzip /path/to/payment_epays-18.0.1.0.3.zip -d .
 git add payment_epays && git commit -m "Update the ePays payment provider to 18.0.1.0.3" && git push
 ```
 
-(with a submodule instead: `git -C epays-odoo pull`, then commit and push the submodule change).
+(with a submodule instead: `git -C epays_plugins_odoo pull`, then commit and push the submodule change).
 
 #### 2. Update the module in the database
 

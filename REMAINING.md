@@ -7,13 +7,14 @@ testing it with real payment methods.
 
 ## 1. Save the work in Git
 
-Nothing is committed in either repository yet.
-
-- [ ] **Addon repository** (`D:\GitHub\epays-odoo`, branch `18.0`): no commit and no remote.
-  - [ ] First commit.
-  - [ ] Create the public GitHub repository `epays-odoo` and push the `18.0` branch.
-  - [ ] Replace the two `<org>` placeholders in `README.md` (clone and submodule URLs) with the
-        GitHub organisation.
+- [ ] **Addon repository** (`D:\GitHub\epays-odoo`, branch `18.0`), pushed to
+      <https://github.com/epays-io/epays_plugins_odoo>.
+  - [x] First commit (`b48d7b4`).
+  - [x] Push the `18.0` branch to `epays-io/epays_plugins_odoo`.
+  - [ ] Make `18.0` the default branch on GitHub. The repository's `master` holds only an
+        unrelated "Initial commit" (`.gitattributes`); delete it once `18.0` is the default.
+  - [x] Replace the `<org>/epays-odoo` placeholders in `README.md` (clone and submodule URLs,
+        folder names) with `epays-io/epays_plugins_odoo`.
   - [ ] Check that the CI workflow (`.github/workflows/ci.yml`: lint + tests in two configurations)
         passes on GitHub.
 - [ ] **ePays repository** (`D:\GitHub\epays_api_dotnet`, branch `feature/odoo-payment-provider`):
@@ -52,7 +53,7 @@ The addon relies on these ePays v2 changes, which exist only on the development 
 
 ## 4. Publish on the Odoo Apps Store
 
-- [ ] Register the GitHub repository (`ssh://git@github.com/<org>/epays-odoo#18.0`) and check that
+- [ ] Register the GitHub repository (`ssh://git@github.com/epays-io/epays_plugins_odoo#18.0`) and check that
       the scan publishes the listing without a manifest error.
 - [ ] Add **screenshots** to `payment_epays/static/description/` (provider form, checkout,
       payment step after a decline) and reference them in `index.html`. Only the icon and the
