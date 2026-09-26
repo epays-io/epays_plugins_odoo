@@ -5,22 +5,7 @@ Status on 2026-09-26. The addon (`payment_epays` 18.0.1.0.3) is feature-complete
 installed and upgraded from the release zip on fresh databases. What remains is shipping it and
 testing it with real payment methods.
 
-## 1. Deploy the ePays API changes
-
-The addon relies on these ePays v2 changes, which exist only on the development server so far:
-
-| Change | Without it |
-|---|---|
-| Payment details return `status`, `customFields`, `responseDescription`, `gatewayReference`, `gatewayResponse`, `updatedAt` | Falls back to the raw `result`; no reference check, no gateway details in the order note |
-| X004 error carries `error.details.observedIp` | *Test connection* cannot show the IP ePays saw (*Find this server's IP address* still works via a public echo service) |
-| v2 `gatewayId` narrows the payment to that gateway (`INVALID_GATEWAY_ID` otherwise) | **Card, Benefit, Apple Pay, … do not open their gateway directly** |
-| A v2 initiation with an `Idempotency-Key` skips the legacy duplicate check | **Two attempts on one order can share one ePays payment** (the addon cancels the older one, but should not have to) |
-| `AddMerchant` refuses a missing name, domain or URL; `trackId` accepted only when numeric | Onboarding and data-quality fixes |
-
-- [ ] Deploy to **testapi.epays.io** (sandbox) and repeat the end-to-end test against it.
-- [ ] Deploy to **api.epays.io** (production).
-
-## 2. Tests still to do
+## 1. Tests still to do
 
 - [ ] A **real card payment** typed into the ePays page in a browser, up to the confirmed order and
       the posted payment. So far the gateway sessions were started, not completed with a card.
@@ -34,7 +19,7 @@ The addon relies on these ePays v2 changes, which exist only on the development 
   - [x] A portal invoice payment and a payment link.
   - [ ] An order in another currency (converted to BHD).
 
-## 3. Publish on the Odoo Apps Store
+## 2. Publish on the Odoo Apps Store
 
 - [ ] Register the GitHub repository (`ssh://git@github.com/epays-io/epays_plugins_odoo#18.0`) and check that
       the scan publishes the listing without a manifest error.
@@ -45,7 +30,7 @@ The addon relies on these ePays v2 changes, which exist only on the development 
       databases that installed the development builds.
 - [ ] Download the zip from the store and install it on a fresh Odoo 18.
 
-## 4. Onboard each merchant (ePays side)
+## 3. Onboard each merchant (ePays side)
 
 For every shop that uses the addon:
 
@@ -55,7 +40,7 @@ For every shop that uses the addon:
       The admin gets the IP from *Find this server's IP address* on the provider form.
 - [ ] On Odoo.sh, re-check the IP after the project moves servers: the outbound address can change.
 
-## 5. Decisions still open
+## 4. Decisions still open
 
 - [ ] **Arabic translations**: written by the developer; have a native speaker review
       `payment_epays/i18n/ar.po`.
@@ -68,7 +53,7 @@ For every shop that uses the addon:
       Settings > *Automatic Currency Rates*); include it in merchant onboarding?
 - [ ] **Refunds**: out of scope for this version (payments only).
 
-## 6. Clean up the development environment
+## 5. Clean up the development environment
 
 - [ ] Docker containers `epays-e2e-odoo` and `epays-e2e-pg`, and the volume `epays-e2e-data`:
       `docker rm -f epays-e2e-odoo epays-e2e-pg && docker volume rm epays-e2e-data`.
