@@ -5,24 +5,7 @@ Status on 2026-09-26. The addon (`payment_epays` 18.0.1.0.3) is feature-complete
 installed and upgraded from the release zip on fresh databases. What remains is shipping it and
 testing it with real payment methods.
 
-## 1. Save the work in Git
-
-- [x] **Addon repository** (`D:\GitHub\epays-odoo`, branch `18.0`), pushed to
-      <https://github.com/epays-io/epays_plugins_odoo>.
-  - [x] First commit (`fb77586`).
-  - [x] Push the `18.0` branch to `epays-io/epays_plugins_odoo`.
-  - [x] Make `18.0` the default branch on GitHub.
-  - [x] Delete the unrelated `master` branch on GitHub; `18.0` is the only branch.
-  - [x] Replace the `<org>/epays-odoo` placeholders in `README.md` (clone and submodule URLs,
-        folder names) with `epays-io/epays_plugins_odoo`.
-  - [x] Check that the CI workflow (`.github/workflows/ci.yml`: lint + tests in two configurations)
-        passes on GitHub: green on `fbe636c` (116 tests alone, 121 with sale and accounting).
-- [ ] **ePays repository** (`D:\GitHub\epays_api_dotnet`, branch `feature/odoo-payment-provider`):
-      30 changed files, uncommitted.
-  - [ ] Run the full gate first: `.\ci-local.ps1` (Release, `-warnaserror`, full suite).
-  - [ ] Commit, open the pull request to `master`.
-
-## 2. Deploy the ePays API changes
+## 1. Deploy the ePays API changes
 
 The addon relies on these ePays v2 changes, which exist only on the development server so far:
 
@@ -37,7 +20,7 @@ The addon relies on these ePays v2 changes, which exist only on the development 
 - [ ] Deploy to **testapi.epays.io** (sandbox) and repeat the end-to-end test against it.
 - [ ] Deploy to **api.epays.io** (production).
 
-## 3. Tests still to do
+## 2. Tests still to do
 
 - [ ] A **real card payment** typed into the ePays page in a browser, up to the confirmed order and
       the posted payment. So far the gateway sessions were started, not completed with a card.
@@ -51,7 +34,7 @@ The addon relies on these ePays v2 changes, which exist only on the development 
   - [ ] A portal invoice payment and a payment link.
   - [ ] An order in another currency (converted to BHD).
 
-## 4. Publish on the Odoo Apps Store
+## 3. Publish on the Odoo Apps Store
 
 - [ ] Register the GitHub repository (`ssh://git@github.com/epays-io/epays_plugins_odoo#18.0`) and check that
       the scan publishes the listing without a manifest error.
@@ -63,7 +46,7 @@ The addon relies on these ePays v2 changes, which exist only on the development 
       databases that installed the development builds.
 - [ ] Download the zip from the store and install it on a fresh Odoo 18.
 
-## 5. Onboard each merchant (ePays side)
+## 4. Onboard each merchant (ePays side)
 
 For every shop that uses the addon:
 
@@ -73,7 +56,7 @@ For every shop that uses the addon:
       The admin gets the IP from *Find this server's IP address* on the provider form.
 - [ ] On Odoo.sh, re-check the IP after the project moves servers: the outbound address can change.
 
-## 6. Decisions still open
+## 5. Decisions still open
 
 - [ ] **Arabic translations**: written by the developer; have a native speaker review
       `payment_epays/i18n/ar.po`.
@@ -86,7 +69,7 @@ For every shop that uses the addon:
       Settings > *Automatic Currency Rates*); include it in merchant onboarding?
 - [ ] **Refunds**: out of scope for this version (payments only).
 
-## 7. Clean up the development environment
+## 6. Clean up the development environment
 
 - [ ] Docker containers `epays-e2e-odoo` and `epays-e2e-pg`, and the volume `epays-e2e-data`:
       `docker rm -f epays-e2e-odoo epays-e2e-pg && docker volume rm epays-e2e-data`.
