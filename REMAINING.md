@@ -7,13 +7,12 @@ testing it with real payment methods.
 
 ## 1. Save the work in Git
 
-- [ ] **Addon repository** (`D:\GitHub\epays-odoo`, branch `18.0`), pushed to
+- [x] **Addon repository** (`D:\GitHub\epays-odoo`, branch `18.0`), pushed to
       <https://github.com/epays-io/epays_plugins_odoo>.
   - [x] First commit (`fb77586`).
   - [x] Push the `18.0` branch to `epays-io/epays_plugins_odoo`.
   - [x] Make `18.0` the default branch on GitHub.
-  - [ ] Delete the `master` branch on GitHub: it holds only an unrelated "Initial commit"
-        (`.gitattributes`).
+  - [x] Delete the unrelated `master` branch on GitHub; `18.0` is the only branch.
   - [x] Replace the `<org>/epays-odoo` placeholders in `README.md` (clone and submodule URLs,
         folder names) with `epays-io/epays_plugins_odoo`.
   - [x] Check that the CI workflow (`.github/workflows/ci.yml`: lint + tests in two configurations)
