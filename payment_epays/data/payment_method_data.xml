@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!-- Payment methods owned by this addon, so that no other provider is affected. They are
+         inactive until the ePays provider is enabled: "ePays" and its brands are then
+         activated by default; the individual methods are activated by the admin. -->
+
+    <!-- === The single "ePays" option: the customer chooses on the ePays page === -->
+
+    <record id="payment_method_epays" model="payment.method">
+        <field name="name">ePays</field>
+        <field name="code">epays</field>
+        <field name="sequence">1</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/epays.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_refund">none</field>
+    </record>
+
+    <record id="payment_method_epays_brand_visa" model="payment.method">
+        <field name="name">VISA</field>
+        <field name="code">epays_brand_visa</field>
+        <field name="primary_payment_method_id" ref="payment_method_epays"/>
+        <field name="sequence">1</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/visa.png"/>
+    </record>
+
+    <record id="payment_method_epays_brand_mastercard" model="payment.method">
+        <field name="name">Mastercard</field>
+        <field name="code">epays_brand_mastercard</field>
+        <field name="primary_payment_method_id" ref="payment_method_epays"/>
+        <field name="sequence">2</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/mastercard.png"/>
+    </record>
+
+    <record id="payment_method_epays_brand_benefit" model="payment.method">
+        <field name="name">Benefit</field>
+        <field name="code">epays_brand_benefit</field>
+        <field name="primary_payment_method_id" ref="payment_method_epays"/>
+        <field name="sequence">3</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/benefit.png"/>
+    </record>
+
+    <record id="payment_method_epays_brand_benefit_pay" model="payment.method">
+        <field name="name">BenefitPay</field>
+        <field name="code">epays_brand_benefit_pay</field>
+        <field name="primary_payment_method_id" ref="payment_method_epays"/>
+        <field name="sequence">4</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/benefit_pay.png"/>
+    </record>
+
+    <record id="payment_method_epays_brand_apple_pay" model="payment.method">
+        <field name="name">Apple Pay</field>
+        <field name="code">epays_brand_apple_pay</field>
+        <field name="primary_payment_method_id" ref="payment_method_epays"/>
+        <field name="sequence">5</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/apple_pay.png"/>
+    </record>
+
+    <record id="payment_method_epays_brand_google_pay" model="payment.method">
+        <field name="name">Google Pay</field>
+        <field name="code">epays_brand_google_pay</field>
+        <field name="primary_payment_method_id" ref="payment_method_epays"/>
+        <field name="sequence">6</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/google_pay.png"/>
+    </record>
+
+    <record id="payment_method_epays_brand_samsung_pay" model="payment.method">
+        <field name="name">Samsung Pay</field>
+        <field name="code">epays_brand_samsung_pay</field>
+        <field name="primary_payment_method_id" ref="payment_method_epays"/>
+        <field name="sequence">7</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/samsung_pay.png"/>
+    </record>
+
+    <record id="payment_method_epays_brand_tabby" model="payment.method">
+        <field name="name">Tabby</field>
+        <field name="code">epays_brand_tabby</field>
+        <field name="primary_payment_method_id" ref="payment_method_epays"/>
+        <field name="sequence">8</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/tabby.png"/>
+    </record>
+
+    <!-- === Individual options: each opens its ePays gateway directly === -->
+
+    <record id="payment_method_epays_card" model="payment.method">
+        <field name="name">Card</field>
+        <field name="code">epays_card</field>
+        <field name="sequence">2</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/card.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_refund">none</field>
+    </record>
+
+    <record id="payment_method_epays_card_visa" model="payment.method">
+        <field name="name">VISA</field>
+        <field name="code">epays_card_visa</field>
+        <field name="primary_payment_method_id" ref="payment_method_epays_card"/>
+        <field name="sequence">1</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/visa.png"/>
+    </record>
+
+    <record id="payment_method_epays_card_mastercard" model="payment.method">
+        <field name="name">Mastercard</field>
+        <field name="code">epays_card_mastercard</field>
+        <field name="primary_payment_method_id" ref="payment_method_epays_card"/>
+        <field name="sequence">2</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/mastercard.png"/>
+    </record>
+
+    <record id="payment_method_epays_benefit" model="payment.method">
+        <field name="name">Benefit</field>
+        <field name="code">epays_benefit</field>
+        <field name="sequence">3</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/benefit.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_refund">none</field>
+        <field name="supported_country_ids" eval="[Command.set([ref('base.bh')])]"/>
+    </record>
+
+    <record id="payment_method_epays_benefit_pay" model="payment.method">
+        <field name="name">BenefitPay</field>
+        <field name="code">epays_benefit_pay</field>
+        <field name="sequence">4</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/benefit_pay.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_refund">none</field>
+        <field name="supported_country_ids" eval="[Command.set([ref('base.bh')])]"/>
+    </record>
+
+    <record id="payment_method_epays_apple_pay" model="payment.method">
+        <field name="name">Apple Pay</field>
+        <field name="code">epays_apple_pay</field>
+        <field name="sequence">5</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/apple_pay.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_refund">none</field>
+    </record>
+
+    <record id="payment_method_epays_google_pay" model="payment.method">
+        <field name="name">Google Pay</field>
+        <field name="code">epays_google_pay</field>
+        <field name="sequence">6</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/google_pay.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_refund">none</field>
+    </record>
+
+    <record id="payment_method_epays_samsung_pay" model="payment.method">
+        <field name="name">Samsung Pay</field>
+        <field name="code">epays_samsung_pay</field>
+        <field name="sequence">7</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/samsung_pay.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_refund">none</field>
+    </record>
+
+    <record id="payment_method_epays_tabby" model="payment.method">
+        <field name="name">Tabby</field>
+        <field name="code">epays_tabby</field>
+        <field name="sequence">8</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment_epays/static/src/img/methods/tabby.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_refund">none</field>
+        <field name="supported_country_ids" eval="[Command.set([ref('base.bh'), ref('base.sa'), ref('base.ae'), ref('base.kw')])]"/>
+    </record>
+
+</odoo>

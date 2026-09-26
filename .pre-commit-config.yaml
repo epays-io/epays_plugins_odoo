@@ -1,0 +1,28 @@
+exclude: ^payment_epays/(LICENSE|i18n/.*\.pot?)$
+default_language_version:
+  python: python3
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-xml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: check-merge-conflict
+  - repo: https://github.com/OCA/pylint-odoo
+    rev: v9.3.3
+    hooks:
+      # Store-blocking checks: manifest keys, licence, version format, missing README, etc.
+      - id: pylint_odoo
+        name: pylint-odoo (manifest and mandatory checks)
+        args:
+          - --rcfile=.pylintrc-mandatory
+          - --valid-odoo-versions=18.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.9
+    hooks:
+      # Python style, import order and complexity, configured in ruff.toml.
+      - id: ruff-check

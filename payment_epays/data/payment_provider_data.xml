@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <data noupdate="1">
+
+        <record id="payment_provider_epays" model="payment.provider">
+            <field name="name">ePays</field>
+            <field name="code">epays</field>
+            <field name="image_128" type="base64" file="payment_epays/static/src/img/epays.png"/>
+            <field name="module_id" ref="base.module_payment_epays"/>
+            <field name="redirect_form_view_id" ref="redirect_form"/>
+            <!-- "ePays" lets the customer choose on the ePays page; each other method opens its
+                 ePays gateway directly. Brands follow their primary method. -->
+            <field name="payment_method_ids"
+                   eval="[Command.set([
+                             ref('payment_epays.payment_method_epays'),
+                             ref('payment_epays.payment_method_epays_card'),
+                             ref('payment_epays.payment_method_epays_benefit'),
+                             ref('payment_epays.payment_method_epays_benefit_pay'),
+                             ref('payment_epays.payment_method_epays_apple_pay'),
+                             ref('payment_epays.payment_method_epays_google_pay'),
+                             ref('payment_epays.payment_method_epays_samsung_pay'),
+                             ref('payment_epays.payment_method_epays_tabby'),
+                         ])]"
+            />
+        </record>
+
+    </data>
+
+    <!-- Runs on every install and update: links the addon's methods to every ePays provider,
+         including duplicates made for other companies and databases installed before the methods
+         existed. -->
+    <function model="payment.provider" name="_epays_ensure_provider_per_company"/>
+    <function model="payment.provider" name="_epays_setup_payment_methods"/>
+
+</odoo>

@@ -1,0 +1,52 @@
+[MASTER]
+load-plugins=pylint_odoo
+score=n
+
+[ODOOLINT]
+readme-template-url="https://github.com/OCA/maintainer-tools/blob/master/template/module/README.rst"
+manifest-required-authors=
+manifest-required-keys=license,author,website,version,depends,data,category,summary
+manifest-deprecated-keys=description,active
+license-allowed=LGPL-3
+valid-odoo-versions=18.0
+
+[MESSAGES CONTROL]
+# translation-required is not enabled: it flags Odoo's own payment provider convention
+# `ValidationError("ePays: " + _("..."))`, where only the provider prefix is left untranslated.
+disable=all
+enable=manifest-required-key,
+    manifest-deprecated-key,
+    manifest-version-format,
+    manifest-maintainers-list,
+    license-allowed,
+    development-status-allowed,
+    resource-not-exist,
+    missing-readme,
+    translation-field,
+    translation-positional-used,
+    translation-format-interpolation,
+    translation-format-truncated,
+    translation-fstring-interpolation,
+    translation-too-few-args,
+    translation-too-many-args,
+    translation-unsupported-format,
+    method-required-super,
+    method-compute,
+    method-inverse,
+    method-search,
+    sql-injection,
+    attribute-deprecated,
+    external-request-timeout,
+    except-pass,
+    print-used,
+    use-vim-comment,
+    dangerous-default-value,
+    duplicate-key,
+    eval-used,
+    pointless-statement,
+    unreachable
+
+[REPORTS]
+msg-template={path}:{line}: [{msg_id}({symbol}), {obj}] {msg}
+output-format=colorized
+reports=no

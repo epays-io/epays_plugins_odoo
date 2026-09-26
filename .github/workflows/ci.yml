@@ -1,0 +1,64 @@
+name: ci
+
+on:
+  push:
+    branches: ["18.0"]
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint (pre-commit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run the pre-commit hooks
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files --show-diff-on-failure
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The module on its own, as the store installs it.
+          - name: payment only
+            modules: payment_epays
+          # With the shop and accounting, which enables the sale and accounting tests.
+          - name: with website_sale and account_payment
+            modules: payment_epays,website_sale,account_payment
+    name: Odoo 18.0 (${{ matrix.name }})
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U odoo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    container:
+      image: odoo:18
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: addons
+      - name: Run the addon tests
+        shell: bash
+        run: |
+          set -o pipefail
+          # Odoo exits non-zero when a test fails.
+          odoo --db_host=postgres --db_user=odoo --db_password=odoo \
+            --addons-path="${GITHUB_WORKSPACE}/addons,/usr/lib/python3/dist-packages/odoo/addons" \
+            -d test -i "${{ matrix.modules }}" \
+            --test-enable --test-tags /payment_epays --stop-after-init 2>&1 | tee odoo.log
+          # A run that executed no test must not pass.
+          grep -E "odoo.tests.result: 0 failed, 0 error\(s\) of [1-9][0-9]* tests" odoo.log

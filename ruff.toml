@@ -1,0 +1,45 @@
+# Code style of the addon, run by pre-commit and CI. Odoo's own conventions come first: the
+# `__init__.py` files import submodules for their side effects, and the manifest is a bare dict.
+line-length = 100
+target-version = "py310"
+
+[lint]
+select = [
+    "F",    # pyflakes
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "I",    # import order
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "C90",  # complexity
+    "SIM",  # simplifications
+    "PIE",
+    "RET",
+    "UP",   # pyupgrade
+    "PERF",
+    "PL",   # pylint
+]
+ignore = [
+    "PLR2004",  # Magic values: HTTP statuses and the like read better inline.
+    "PLR0913",  # Odoo overrides take the arguments the framework passes.
+    "PLR0911",  # A diagnosis that maps each reason to its message returns once per reason.
+    "UP031",    # Odoo's `_()` takes %-style placeholders, not f-strings.
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401", "I001"]
+"__manifest__.py" = ["B018"]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.isort]
+section-order = [
+    "future", "standard-library", "third-party", "odoo", "odoo-addons", "first-party",
+    "local-folder",
+]
+no-lines-before = ["local-folder"]
+
+[lint.isort.sections]
+"odoo" = ["odoo"]
+"odoo-addons" = ["odoo.addons"]

@@ -1,0 +1,950 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* payment_epays
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0-20260908\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-26 11:12+0000\n"
+"PO-Revision-Date: 2026-09-26 11:12+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "%(env)s (%(url)s): %(result)s"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"%(found)s gateways found on ePays, %(mapped)s linked to a payment method."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "1 %(from_currency)s = %(rate)s %(to_currency)s"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid ""
+"<strong>Data shared with ePays.</strong>\n"
+"                        ePays is an external, paid service. For each payment, Odoo sends ePays the\n"
+"                        amount, the currency, the sales order and invoice numbers, and the\n"
+"                        database and website names with the Odoo and addon versions.\n"
+"                        When \"Send Customer Details\" is on, it also sends the customer's name,\n"
+"                        email, phone and address. ePays returns the payment result with masked card\n"
+"                        and authorisation details, which are stored on the transaction."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_api_id
+msgid "API ID"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_master_key
+msgid "API Master Key"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_api_url
+msgid "API URL"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__is_active
+msgid "Active on ePays"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Amount"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_charged_amount
+msgid "Amount Charged"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.constraint,message:payment_epays.constraint_payment_epays_gateway_gateway_uniq
+msgid "An ePays gateway can only be listed once per provider and environment."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"An ePays provider in Localhost mode cannot be published: customers would be "
+"sent to their own computer. Unpublish it, or set its Mode to Sandbox."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"An enabled ePays provider takes real payments: set its Mode to Production, "
+"or set its state to Test."
+msgstr ""
+
+#. module: payment_epays
+#: model:payment.method,name:payment_epays.payment_method_epays_apple_pay
+#: model:payment.method,name:payment_epays.payment_method_epays_brand_apple_pay
+msgid "Apple Pay"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_payment_lang__ar
+msgid "Arabic"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid ""
+"At checkout, \"ePays\" lets the customer choose the payment method on the\n"
+"                        ePays page. Each other payment method (Card, Benefit, BenefitPay, Apple Pay,\n"
+"                        Google Pay, Samsung Pay, Tabby) opens its ePays gateway directly: activate it\n"
+"                        with \"Enable Payment Methods\" above, then sync the gateways from ePays. The\n"
+"                        sync reads the server of the current Mode (Production, Sandbox or\n"
+"                        Localhost). You can correct the payment method of a gateway below."
+msgstr ""
+
+#. module: payment_epays
+#: model:payment.method,name:payment_epays.payment_method_epays_benefit
+#: model:payment.method,name:payment_epays.payment_method_epays_brand_benefit
+msgid "Benefit"
+msgstr ""
+
+#. module: payment_epays
+#: model:payment.method,name:payment_epays.payment_method_epays_benefit_pay
+#: model:payment.method,name:payment_epays.payment_method_epays_brand_benefit_pay
+msgid "BenefitPay"
+msgstr ""
+
+#. module: payment_epays
+#: model:payment.method,name:payment_epays.payment_method_epays_card
+msgid "Card"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__code
+msgid "Code"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model,name:payment_epays.model_res_company
+msgid "Companies"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__company_id
+msgid "Company"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "Could not establish the connection to the API."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Created At"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__create_uid
+msgid "Created by"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__create_date
+msgid "Created on"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_charged_currency_id
+msgid "Currency Charged"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_payment_lang__customer
+msgid "Customer's language"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__display_name
+msgid "Display Name"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid ""
+"Do not clear the payment journal while ePays payments may still be in progress:\n"
+"                    Odoo could not record those payments."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_payment_lang__en
+msgid "English"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__environment
+msgid "Environment"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_exchange_rate
+msgid "Exchange Rate"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid "Find this server's IP address"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__name
+msgid "Gateway"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__gateway_class
+msgid "Gateway Class"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_gateway_reference
+msgid "Gateway Reference"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_gateway_response_display
+msgid "Gateway Response"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_gateway_response
+msgid "Gateway Response (raw)"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__gateway_type_id
+msgid "Gateway Type ID"
+msgstr ""
+
+#. module: payment_epays
+#: model:payment.method,name:payment_epays.payment_method_epays_brand_google_pay
+#: model:payment.method,name:payment_epays.payment_method_epays_google_pay
+msgid "Google Pay"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_link_expiry
+msgid "How long the customer has to complete the payment on the ePays page."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__id
+msgid "ID"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_udf3
+msgid "Invoices Sent (udf3)"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__write_uid
+msgid "Last Updated by"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__write_date
+msgid "Last Updated on"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid "Leave empty to use the production API ID"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid "Leave empty to use the production master key"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid "Leave empty to use the website domain"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_gateway__environment__localhost
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_mode__localhost
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_transaction__epays_environment__localhost
+msgid "Localhost"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid ""
+"Localhost is for development: it reaches an ePays API running on this Odoo\n"
+"                        server, and the server must trust its certificate."
+msgstr ""
+
+#. module: payment_epays
+#: model:payment.method,name:payment_epays.payment_method_epays_brand_mastercard
+#: model:payment.method,name:payment_epays.payment_method_epays_card_mastercard
+msgid "Mastercard"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_merchant_domain
+msgid "Merchant Domain"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_mode
+msgid "Mode"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "No transaction found matching payment id %s."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Order Amount"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Paid At"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_link_expiry
+msgid "Payment Link Expiry (minutes)"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model,name:payment_epays.model_payment_method
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__payment_method_id
+msgid "Payment Method"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_payment_lang
+msgid "Payment Page Language"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model,name:payment_epays.model_payment_provider
+msgid "Payment Provider"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model,name:payment_epays.model_payment_transaction
+msgid "Payment Transaction"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-javascript
+#: code:addons/payment_epays/static/src/js/payment_form.js:0
+msgid "Payment cancelled"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-javascript
+#: code:addons/payment_epays/static/src/js/payment_form.js:0
+msgid "Payment not completed"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
+"Payments in %(currency)s cannot be taken at the moment. Please contact us."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_gateway__environment__production
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_mode__production
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_transaction__epays_environment__production
+msgid "Production"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__provider_id
+msgid "Provider"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Received data with missing payment id."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Replaced by transaction %s (amount changed)."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Replaced by transaction %s (payment method changed)."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Replaced by transaction %s."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_response_code
+msgid "Response Code"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_response_desc
+msgid "Response Description"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Result"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_udf2
+msgid "Sales Orders Sent (udf2)"
+msgstr ""
+
+#. module: payment_epays
+#: model:payment.method,name:payment_epays.payment_method_epays_brand_samsung_pay
+#: model:payment.method,name:payment_epays.payment_method_epays_samsung_pay
+msgid "Samsung Pay"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_gateway__environment__sandbox
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_mode__sandbox
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_transaction__epays_environment__sandbox
+msgid "Sandbox"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_sandbox_api_id
+msgid "Sandbox API ID"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_sandbox_master_key
+msgid "Sandbox API Master Key"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_send_customer_details
+msgid "Send Customer Details"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_send_customer_details
+msgid "Send the customer's name, email, phone and address to ePays."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__status
+msgid "Status"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid "Sync from ePays"
+msgstr ""
+
+#. module: payment_epays
+#: model:payment.method,name:payment_epays.payment_method_epays_brand_tabby
+#: model:payment.method,name:payment_epays.payment_method_epays_tabby
+msgid "Tabby"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid "Test connection"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "The %s contains spaces or line breaks. Copy it again from ePays."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "The API ID and the API master key are required."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_api_id
+msgid "The API ID of the ePays merchant, used in production."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_sandbox_api_id
+msgid ""
+"The API ID used in Sandbox and Localhost mode. Leave empty to use the "
+"production API ID."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_master_key
+msgid ""
+"The API master key of the ePays merchant, used in production. Once saved, it"
+" is never shown again: enter a new key to replace it."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_sandbox_master_key
+msgid ""
+"The API master key used in Sandbox and Localhost mode. Leave empty to use "
+"the production master key. Once saved, it is never shown again."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_epays_gateway__payment_method_id
+msgid "The Odoo payment method that opens this gateway directly."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_charged_amount
+msgid ""
+"The amount sent to ePays: the transaction's amount, converted with Odoo's "
+"exchange rate when the transaction is in another currency."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_merchant_domain
+msgid ""
+"The domain registered on the ePays licence. Leave empty to use the domain of"
+" the website at payment time."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_gateway_requested
+msgid ""
+"The ePays gateway the payment page was opened for (merchantGateway), for a "
+"payment method that opens one gateway directly. Empty when the customer "
+"chose on the ePays page."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "The ePays master keys cannot be searched, grouped or sorted."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_payment_url
+msgid ""
+"The ePays payment page of this transaction, reused if the customer pays the "
+"same order again while the payment is still pending."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_mode
+msgid ""
+"The ePays server that takes the payments. Production takes real payments and"
+" is the only mode allowed when the provider is Enabled. Sandbox and "
+"Localhost (an ePays API running on this server, for development) send test "
+"payments with the sandbox credentials."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_gateway_response
+msgid ""
+"The gateway response returned by ePays, as JSON. Card data is masked by "
+"ePays."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_gateway_ids
+msgid "The gateways the merchant subscribed to on ePays, as last synced."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_epays_gateway__gateway_ref
+msgid ""
+"The id of the merchant's subscription to the gateway on ePays "
+"(merchantGateway). It is sent to ePays to open this gateway directly."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_udf3
+msgid ""
+"The invoice numbers sent to ePays in udf3, checked again when the payment "
+"completes."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_payment_lang
+msgid ""
+"The language of the ePays payment page. \"Customer's language\" uses the "
+"language of the website, then the language of the customer."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "The payment link expiry must be at least one minute."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"The public IP address of this server could not be found: it may not reach "
+"the internet. Ask your hosting provider for its outbound IP address."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_server_ip
+msgid ""
+"The public IP address this Odoo server calls ePays from, as last found by "
+"\"Find this server's IP address\" or the connection test. Your ePays licence"
+" must list it."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_udf2
+msgid ""
+"The sales order numbers sent to ePays in udf2, checked again when the "
+"payment completes."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__code
+msgid "The technical code of this payment provider."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_exchange_rate
+msgid ""
+"The units of the charged currency per unit of the transaction's currency."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_server_ip
+msgid "This Server's IP Address"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "This order has already been paid."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "This payment method is no longer available."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "This server's IP address"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"This server's public IP address is %s. Ask ePays to add it to your licence, "
+"then click Test connection."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"This server's public IP address is %s. Your ePays licence already allows it:"
+" the connection works."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Transaction ID"
+msgstr ""
+
+#. module: payment_epays
+#: model:payment.method,name:payment_epays.payment_method_epays_brand_visa
+#: model:payment.method,name:payment_epays.payment_method_epays_card_visa
+msgid "VISA"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
+"We could not confirm your payment. Please contact us before trying again, "
+"quoting the reference %s."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "You can try again or choose another payment method."
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid ""
+"Your ePays licence must list the merchant domain and the public IP address\n"
+"                        of this Odoo server. \"Find this server's IP address\" shows the address to\n"
+"                        give ePays; the connection test tells you which one is missing."
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:payment.provider,auth_msg:payment_epays.payment_provider_epays
+msgid "Your payment has been authorized."
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:payment.provider,cancel_msg:payment_epays.payment_provider_epays
+msgid "Your payment has been cancelled."
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:payment.provider,pending_msg:payment_epays.payment_provider_epays
+msgid ""
+"Your payment has been successfully processed but is waiting for approval."
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:payment.provider,done_msg:payment_epays.payment_provider_epays
+msgid "Your payment has been successfully processed."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Your payment was cancelled."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Your payment was declined."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Your payment was declined: %s."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
+"Your payment was refunded, so your order was not confirmed. Please contact "
+"us, quoting the reference %s."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__code__epays
+#: model:payment.method,name:payment_epays.payment_method_epays
+#: model:payment.provider,name:payment_epays.payment_provider_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_transaction_form
+msgid "ePays"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_environment
+msgid "ePays Environment"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model,name:payment_epays.model_payment_epays_gateway
+msgid "ePays Gateway"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__gateway_ref
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_gateway_id
+msgid "ePays Gateway ID"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_gateway_requested
+msgid "ePays Gateway Requested"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_gateway_ids
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
+msgid "ePays Gateways"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_expires_at
+msgid "ePays Link Expiry"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_merchant_domain
+msgid "ePays Merchant Domain"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "ePays Payment ID"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_payment_url
+msgid "ePays Payment Page"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_transaction_id
+msgid "ePays Transaction ID"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "ePays answered with HTTP %(status)s %(code)s %(message)s"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "ePays connection test (merchant domain: %s)"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "ePays found no licence for this API ID. Check the API ID."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "ePays gateways (%s)"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "ePays payment details for transaction %s"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"ePays sees this server as %s, and your licence does not allow it yet. Ask "
+"ePays to add this IP address to your licence."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.actions.server,name:payment_epays.cron_epays_poll_pending_ir_actions_server
+msgid "ePays: check pending payments"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "the API ID and the API master key are required."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "the API ID or the API master key is wrong."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "the connection works."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "the ePays API could not be reached (%s). Check the Mode."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"the ePays licence does not allow the IP address of this Odoo server (%s). "
+"Ask ePays to register this IP address."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"the ePays licence does not allow the IP address of this Odoo server. Ask "
+"ePays to register the public IP address of the server."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"the ePays licence does not list the domain %s. Ask ePays to register it, or "
+"set the Merchant Domain to the registered one."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "the response of ePays could not be read."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "too many failed attempts. Wait a few minutes before trying again."
+msgstr ""

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="payment_transaction_form" model="ir.ui.view">
+        <field name="name">ePays Transaction Form</field>
+        <field name="model">payment.transaction</field>
+        <field name="inherit_id" ref="payment.payment_transaction_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='transaction_details']/.." position="after">
+                <group string="ePays" name="epays_details" invisible="provider_code != 'epays'">
+                    <group name="epays_payment">
+                        <field name="epays_environment"/>
+                        <field name="epays_merchant_domain"/>
+                        <field name="epays_expires_at"/>
+                        <field name="epays_payment_url" widget="url" groups="base.group_system"/>
+                        <field name="epays_gateway_requested"/>
+                        <field name="epays_charged_amount"/>
+                        <field name="epays_charged_currency_id" invisible="1"/>
+                        <field name="epays_exchange_rate" invisible="epays_exchange_rate in (0, 1)"/>
+                        <field name="epays_udf2"/>
+                        <field name="epays_udf3"/>
+                    </group>
+                    <group name="epays_result">
+                        <field name="epays_transaction_id"/>
+                        <field name="epays_gateway_reference"/>
+                        <field name="epays_response_code"/>
+                        <field name="epays_response_desc"/>
+                        <field name="epays_gateway_id"/>
+                    </group>
+                </group>
+                <group name="epays_gateway_response"
+                       invisible="provider_code != 'epays' or not epays_gateway_response">
+                    <field name="epays_gateway_response_display"/>
+                    <field name="epays_gateway_response" class="font-monospace"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

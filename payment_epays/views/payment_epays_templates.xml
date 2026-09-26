@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="redirect_form">
+        <!-- ePays generates a unique URL for each payment request -->
+        <form t-att-action="api_url" method="get">
+            <t t-foreach="url_params" t-as="param">
+                <input type="hidden" t-att-name="param" t-att-value="url_params[param]"/>
+            </t>
+        </form>
+    </template>
+
+    <!-- The payment form shows at most four logos per payment method. The single "ePays" option
+         stands for every method of the ePays page, so it shows all of its logos. -->
+    <template id="method_form" inherit_id="payment.method_form">
+        <xpath expr="//t[@t-call='payment.form_logo']" position="attributes">
+            <attribute name="t-if">pm_index &lt; 4 or pm_sudo.code == 'epays'</attribute>
+        </xpath>
+    </template>
+
+</odoo>

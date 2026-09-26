@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="payment_provider_form" model="ir.ui.view">
+        <field name="name">ePays Provider Form</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <group name="provider_credentials" position="inside">
+                <group name="epays_credentials" invisible="code != 'epays'">
+                    <field name="epays_api_id"
+                           required="code == 'epays' and state != 'disabled'"/>
+                    <field name="epays_master_key"
+                           password="True"
+                           required="code == 'epays' and state != 'disabled'"/>
+                    <field name="epays_sandbox_api_id"
+                           placeholder="Leave empty to use the production API ID"/>
+                    <field name="epays_sandbox_master_key"
+                           password="True"
+                           placeholder="Leave empty to use the production master key"/>
+                    <field name="epays_merchant_domain"
+                           placeholder="Leave empty to use the website domain"/>
+                    <field name="epays_mode" widget="radio" required="code == 'epays'"/>
+                    <field name="epays_api_url" widget="url"/>
+                    <div class="alert alert-warning" role="alert" colspan="2"
+                         invisible="epays_mode != 'localhost'">
+                        Localhost is for development: it reaches an ePays API running on this Odoo
+                        server, and the server must trust its certificate.
+                    </div>
+                    <field name="epays_server_ip"
+                           widget="CopyClipboardChar"
+                           invisible="not epays_server_ip"/>
+                    <div class="o_row" colspan="2">
+                        <button string="Test connection"
+                                type="object"
+                                name="action_epays_test_connection"
+                                class="btn-primary"
+                                icon="fa-plug"/>
+                        <button string="Find this server's IP address"
+                                type="object"
+                                name="action_epays_find_server_ip"
+                                class="btn-secondary"
+                                icon="fa-globe"/>
+                    </div>
+                    <div class="text-muted" colspan="2">
+                        Your ePays licence must list the merchant domain and the public IP address
+                        of this Odoo server. "Find this server's IP address" shows the address to
+                        give ePays; the connection test tells you which one is missing.
+                    </div>
+                </group>
+            </group>
+            <group name="provider_config" position="inside">
+                <group string="ePays" name="epays_options" invisible="code != 'epays'">
+                    <field name="epays_payment_lang"/>
+                    <field name="epays_link_expiry"/>
+                    <field name="epays_send_customer_details"/>
+                    <div class="alert alert-info" role="status" colspan="2">
+                        <strong>Data shared with ePays.</strong>
+                        ePays is an external, paid service. For each payment, Odoo sends ePays the
+                        amount, the currency, the sales order and invoice numbers, and the
+                        database and website names with the Odoo and addon versions.
+                        When "Send Customer Details" is on, it also sends the customer's name,
+                        email, phone and address. ePays returns the payment result with masked card
+                        and authorisation details, which are stored on the transaction.
+                    </div>
+                </group>
+            </group>
+            <group name="provider_config" position="after">
+                <div name="epays_gateways" class="mt-3" invisible="code != 'epays'">
+                    <separator string="ePays Gateways"/>
+                    <div class="text-muted mb-2">
+                        At checkout, "ePays" lets the customer choose the payment method on the
+                        ePays page. Each other payment method (Card, Benefit, BenefitPay, Apple Pay,
+                        Google Pay, Samsung Pay, Tabby) opens its ePays gateway directly: activate it
+                        with "Enable Payment Methods" above, then sync the gateways from ePays. The
+                        sync reads the server of the current Mode (Production, Sandbox or
+                        Localhost). You can correct the payment method of a gateway below.
+                    </div>
+                    <button string="Sync from ePays"
+                            type="object"
+                            name="action_epays_sync_gateways"
+                            class="btn-secondary mb-2"
+                            icon="fa-refresh"/>
+                    <field name="epays_gateway_ids" nolabel="1">
+                        <list editable="bottom" create="false" delete="false"
+                              decoration-muted="not is_active">
+                            <field name="environment" readonly="1"/>
+                            <field name="name" readonly="1"/>
+                            <field name="gateway_ref" readonly="1"/>
+                            <field name="gateway_type_id" readonly="1" optional="hide"/>
+                            <field name="gateway_class" readonly="1" optional="show"/>
+                            <field name="status" readonly="1"/>
+                            <field name="is_active" column_invisible="1"/>
+                            <field name="payment_method_id"
+                                   options="{'no_create': True, 'no_open': True}"/>
+                        </list>
+                    </field>
+                </div>
+            </group>
+            <group name="payment_followup" position="inside">
+                <div class="alert alert-warning" role="alert" colspan="2"
+                     invisible="code != 'epays'">
+                    Do not clear the payment journal while ePays payments may still be in progress:
+                    Odoo could not record those payments.
+                </div>
+            </group>
+        </field>
+    </record>
+
+</odoo>

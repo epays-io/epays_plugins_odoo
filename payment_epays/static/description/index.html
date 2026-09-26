@@ -1,0 +1,255 @@
+<section class="container py-4">
+    <div class="row">
+        <div class="col-12 text-center">
+            <h2 class="text-primary">ePays Payment Provider</h2>
+            <h4 class="text-muted">Cards, Benefit, BenefitPay, Apple Pay, Google Pay, Samsung Pay and Tabby through the ePays hosted payment page</h4>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <img class="img-fluid rounded shadow-sm" src="banner.png" alt="ePays"/>
+        </div>
+        <div class="col-md-6">
+            <p>
+                Let your customers pay on the ePays payment page from the Odoo shop, the customer
+                portal and payment links. Odoo checks every result with ePays, server to server,
+                and completes the order the standard way: the sales order is confirmed, the
+                payment is posted in accounting and the invoice is reconciled.
+            </p>
+            <ul>
+                <li>Hosted redirect: no card data ever touches your Odoo server.</li>
+                <li>Visa and Mastercard cards, Benefit, BenefitPay, Apple Pay, Google Pay, Samsung Pay
+                    and Tabby, as enabled on your ePays account.</li>
+                <li>One "ePays" option showing every logo, plus individual methods that open
+                    their gateway directly.</li>
+                <li>Production and Sandbox modes, with separate sandbox credentials; Test state
+                    is visible only to your staff.</li>
+                <li>A connection test that tells you exactly what to register with ePays.</li>
+                <li>Order references in the ePays custom fields, for easy reconciliation.</li>
+                <li>A scheduled check for customers who close the browser after paying.</li>
+                <li>English and Arabic.</li>
+            </ul>
+            <div class="alert alert-warning" role="alert">
+                ePays is an external, paid service: you need an ePays merchant account.
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="container py-4">
+    <h3 class="text-primary">Installation</h3>
+    <p>
+        A payment provider contains Python code, so Odoo installs it only from the server's
+        <code>addons_path</code>; Apps &gt; Import Module cannot install it.
+    </p>
+    <ul>
+        <li><strong>On-premise:</strong> unzip the <code>payment_epays</code> folder into a
+            directory of your <code>addons_path</code>, restart Odoo, then Apps &gt; Update Apps
+            List and install <em>ePays Payment Provider</em>.</li>
+        <li><strong>Odoo.sh:</strong> add the module to your project repository, or use the
+            <em>Deploy on Odoo.sh</em> button of this page, then install it from Apps.</li>
+        <li><strong>Odoo Online (SaaS) is not supported:</strong> it cannot run third-party Python
+            modules.</li>
+    </ul>
+    <p>
+        The provider is created <strong>Disabled</strong>, so nothing changes at checkout until
+        you configure it as described below. Behind a reverse proxy, run Odoo with
+        <code>proxy_mode = True</code>.
+    </p>
+</section>
+
+<section class="container py-4">
+    <h3 class="text-primary">How to use it</h3>
+
+    <h5 class="mt-3">1. Get your ePays details</h5>
+    <p>Ask ePays for:</p>
+    <ul>
+        <li>your merchant <strong>API ID</strong> and <strong>API master key</strong>, and a
+            sandbox pair if ePays gives you one;</li>
+        <li>your licence to list your <strong>shop domain</strong> (for example
+            <code>shop.example.com</code>) and the <strong>public IP address of your Odoo
+            server</strong>;</li>
+        <li>the gateways you want (cards, Benefit, BenefitPay, Apple Pay, Google Pay, Samsung
+            Pay, Tabby) activated on your account.</li>
+    </ul>
+
+    <h5 class="mt-3">2. Enter the keys</h5>
+    <p>
+        As an administrator, open Invoicing (or Website) &gt; Configuration &gt; Payment Providers
+        &gt; <strong>ePays</strong>, then the <strong>Credentials</strong> tab:
+    </p>
+    <ul>
+        <li><strong>API ID</strong> and <strong>API Master Key</strong>: your production keys.</li>
+        <li><strong>Sandbox API ID</strong> and <strong>Sandbox API Master Key</strong>: your test
+            keys. Leave them empty to use the production keys for tests too.</li>
+        <li><strong>Merchant Domain</strong>: the domain on your ePays licence. Leave it empty to
+            use your website's domain.</li>
+        <li><strong>Mode</strong>: the ePays server that takes the payments.</li>
+    </ul>
+    <table class="table table-sm table-bordered">
+        <thead class="table-light">
+            <tr><th>Mode</th><th>Server</th><th>Use it for</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>Production</td><td>api.epays.io</td><td>Real payments. Required when the
+                provider is Enabled.</td></tr>
+            <tr><td>Sandbox</td><td>testapi.epays.io</td><td>Test payments, with the sandbox
+                keys.</td></tr>
+        </tbody>
+    </table>
+    <p>
+        Click <strong>Find this server's IP address</strong> to get the public IP address to give
+        ePays, with a copy button. Then click <strong>Test connection</strong>: it either confirms
+        that the connection works or says what to fix: a wrong key, a domain missing from your
+        licence, or the exact IP address to ask ePays to register.
+    </p>
+
+    <h5 class="mt-3">3. Choose the payment methods</h5>
+    <p>
+        <strong>ePays</strong> is on by default: one option at checkout, showing every logo, where
+        the customer picks the method on the ePays page. To offer Card, Benefit, BenefitPay, Apple
+        Pay, Google Pay, Samsung Pay or Tabby as separate options, turn them on with
+        <strong>Enable Payment Methods</strong>, then click <strong>Sync from ePays</strong> in
+        the Configuration tab so each one opens its gateway directly.
+    </p>
+
+    <h5 class="mt-3">4. Test on your live shop</h5>
+    <p>
+        Set the state to <strong>Test</strong>. The mode switches to Sandbox, and only logged-in
+        staff see ePays at checkout; customers see nothing. Click <strong>Sync from
+        ePays</strong>, place an order in BHD, pay on the ePays test page and check that the order
+        is confirmed.
+    </p>
+
+    <h5 class="mt-3">5. Go live</h5>
+    <p>
+        Set the state to <strong>Enabled</strong>. The mode switches to Production and ePays is
+        shown to every customer. Click <strong>Test connection</strong> and <strong>Sync from
+        ePays</strong> again, since the production server has its own gateways. To stop taking
+        ePays payments, set the state to <strong>Disabled</strong>: your keys and settings are
+        kept, and payments already in progress still complete.
+    </p>
+
+    <h5 class="mt-3">6. Every day</h5>
+    <ul>
+        <li><strong>Shop:</strong> the customer picks ePays, pays on the ePays page and comes
+            back to the order confirmation. The sales order is confirmed and the payment is
+            posted in the provider's journal.</li>
+        <li><strong>Quotations, invoices and payment links:</strong> customers can also pay from
+            the customer portal, or from a link made with <em>Generate a Payment Link</em> on a
+            sales order or invoice.</li>
+        <li><strong>Payment details:</strong> each paid order and invoice gets an internal note
+            with the ePays payment id, the gateway reference and the masked card. The same details
+            are on the payment transaction.</li>
+        <li><strong>Customer closed the browser after paying:</strong> the scheduled action
+            <em>ePays: check pending payments</em> completes the order within 15 minutes. Keep it
+            active.</li>
+        <li><strong>Customer goes back and pays again:</strong> the same ePays payment is reused,
+            so an order never has two payable links.</li>
+        <li><strong>Reconciliation:</strong> in the ePays portal, find a payment by its sales
+            order number (udf2) or invoice number (udf3).</li>
+    </ul>
+
+    <h5 class="mt-3">7. Find a payment in Odoo</h5>
+    <p>
+        Every attempt to pay is a <strong>payment transaction</strong>. Odoo lists them in
+        developer mode only: activate it first (Settings &gt; Developer Tools &gt;
+        <em>Activate the developer mode</em>).
+    </p>
+    <ul>
+        <li><strong>All ePays payments:</strong> Invoicing (or Accounting) &gt; Configuration &gt;
+            Online Payments &gt; <strong>Payment Transactions</strong>, or Website &gt;
+            Configuration &gt; eCommerce &gt; <strong>Payment Transactions</strong>. Filter or group
+            by provider <em>ePays</em>; search the <em>Provider Reference</em> for an ePays payment
+            id.</li>
+        <li><strong>One transaction:</strong> its state and the message the customer saw, and an
+            <strong>ePays</strong> section with the environment, the sales order and invoice
+            numbers sent, the ePays transaction id, the gateway reference, the response code and
+            description, and the gateway response (masked card, authorisation code, 3-D Secure
+            result).</li>
+        <li><strong>From an order or an invoice:</strong> each finished payment writes an
+            <em>ePays payment details</em> note in its chatter, and the payment recorded in
+            accounting links to its transaction.</li>
+    </ul>
+    <div class="alert alert-info" role="status">
+        ePays takes payments in Bahraini dinar (BHD). An order in another currency is converted
+        to BHD with Odoo's exchange rate of the day, and the customer pays the BHD amount on the
+        ePays page; the payment is recorded in the order's currency. Keep your exchange rates up
+        to date: ePays is not offered in a currency Odoo has no rate for.
+    </div>
+</section>
+
+<section class="container py-4">
+    <h3 class="text-primary">Payment methods at checkout</h3>
+    <ul>
+        <li><strong>ePays</strong>, on by default: one option showing the logos of every method.
+            The customer chooses the method on the ePays page.</li>
+        <li><strong>Card, Benefit, BenefitPay, Apple Pay, Google Pay, Samsung Pay, Tabby</strong>,
+            off by default: each one opens its ePays gateway directly. Turn them on in the
+            provider's payment methods.</li>
+    </ul>
+    <p>
+        Click <strong>Sync from ePays</strong> on the provider to read the gateways activated on
+        your merchant account; each is linked to its payment method automatically, and you can
+        correct a link. Benefit and BenefitPay
+        are offered when the billing address selected at checkout is in Bahrain; Tabby when it is
+        in Bahrain, Saudi Arabia, the UAE or Kuwait; Apple Pay only on browsers that support it.
+        All payment method logos are ePays artwork, and other payment providers are not affected.
+    </p>
+</section>
+
+<section class="container py-4">
+    <h3 class="text-primary">Reconciliation</h3>
+    <p>Every payment carries the order and invoice numbers in two ePays custom fields:</p>
+    <table class="table table-sm table-bordered">
+        <thead class="table-light">
+            <tr><th>Field</th><th>Value</th><th>Example</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>udf2</td><td>Sales order number(s)</td><td>S00012</td></tr>
+            <tr><td>udf3</td><td>Invoice number(s), for portal and payment-link invoice payments</td><td>INV/2026/00012</td></tr>
+        </tbody>
+    </table>
+    <p>
+        Going back and paying the same order again reuses the same ePays payment while it is
+        pending, so an order never has two payable ePays links. If the cart changed, or the
+        customer chose another payment method, the old payment is voided first and a new one opens
+        for the chosen method.
+    </p>
+    <p>
+        udf6 to udf10 are never sent: ePays uses them as gateway settings (for example the MPGS
+        merchant ID and the Benefit alias). When a payment completes, Odoo checks that ePays
+        returns the same order and invoice numbers.
+    </p>
+    <p>
+        When a payment finishes, the ePays payment id, transaction id, gateway reference, response
+        and the masked card details are shown on the Odoo transaction and written as an internal
+        note on the sales order and invoice.
+    </p>
+</section>
+
+<section class="container py-4">
+    <h3 class="text-primary">Data shared with ePays</h3>
+    <p>For each payment, Odoo sends ePays:</p>
+    <ul>
+        <li>the amount, in BHD (converted when the order is in another currency);</li>
+        <li>the sales order and invoice numbers (udf2 and udf3);</li>
+        <li>the database and website names and the Odoo and addon versions, in the request's
+            User-Agent;</li>
+        <li>optionally (on by default, can be switched off), the customer's name, email, phone
+            and address.</li>
+    </ul>
+    <p>
+        Odoo receives from ePays the payment result, including masked card data (last four
+        digits) and authorisation details, and stores them on the transaction.
+    </p>
+</section>
+
+<section class="container py-4">
+    <h3 class="text-primary">Support</h3>
+    <p>
+        Odoo 18.0, Community and Enterprise. Questions:
+        <a href="mailto:info@epays.io">info@epays.io</a> or +973 3322 0204
+        (ePays IT Solutions, Manama, Bahrain).
+    </p>
+</section>
