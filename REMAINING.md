@@ -27,7 +27,8 @@ testing it with real payment methods.
       payment step after a decline) and reference them in `index.html`.
 - [x] Choose the first public version: `18.0.1.0.3`, as published on the store; the migrations
       `18.0.1.0.1` and `18.0.1.0.3` stay.
-- [ ] Download the zip from the store and install it on a fresh Odoo 18.
+- [x] Download the zip from the store and install it on a fresh Odoo 18: identical to the
+      repository, installed cleanly with `website_sale` and `account_payment` (2026-09-26).
 
 ## 3. Onboard each merchant (ePays side)
 
