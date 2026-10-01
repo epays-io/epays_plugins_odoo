@@ -83,12 +83,17 @@ early for other providers.
   databases that lack it (Odoo recomputes provider colour, reading every column, before the upgrade
   adds it). Use a system parameter (like `const.SERVER_IP_PARAM`) or an addon model.
   `test_the_addon_adds_no_new_column_to_payment_provider` guards this.
+  `migrations/18.0.1.0.3/pre-migrate.py` is how the one such column was moved to a parameter and
+  dropped.
 - **Master keys never reach the browser**: reads return `const.SECRET_MASK`, writing the mask back
   keeps the stored value, and `_read_format` / `_search` / `_read_group` overrides refuse secret
   fields. Keep secrets out of logs (`_redact`).
 - Test + Localhost + Published is refused by a constraint; Localhost mode is for a local ePays API.
 - Bump `version` in `__manifest__.py` for any release installed databases must pick up, and put data
-  changes for existing databases in `payment_epays/migrations/<version>/`. `data/neutralize.sql`
-  clears keys on neutralised (staging) databases.
+  changes for existing databases in `payment_epays/migrations/<version>/`; migrations only undo
+  values the addon set itself and keep what an administrator chose (see `18.0.1.0.1`).
+- `data/neutralize.sql` runs on neutralised (staging) databases: it clears master keys, moves
+  providers off production and deletes the server-IP parameter. A new secret or server-specific
+  value must be added there (`test_neutralize_clears_the_keys`).
 - Match the existing style: files start with the `# Part of ePays Payment Provider…` header;
   docstrings in Odoo's `""" … """` style with `:param:` / `:return:`; comments explain *why*.
