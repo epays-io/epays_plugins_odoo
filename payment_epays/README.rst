@@ -234,7 +234,10 @@ Credentials tab
       generic error.
 
 Configuration tab (ePays group)
-    * **Payment Page Language**: the customer's (website) language, English or Arabic.
+    * **Payment Page Language**: the customer's (website) language, English or Arabic. What Odoo
+      tells the customer about the payment afterwards (e.g. why it was declined) is in the language
+      the page was opened in: a customer paying from the Arabic website is answered in Arabic,
+      whatever the language of their contact.
     * **Payment Link Expiry (minutes)**: default 60.
     * **Send Customer Details**: sends the customer's name, email, phone and address (default on).
 

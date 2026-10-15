@@ -183,9 +183,12 @@ class PaymentTransaction(models.Model):
 
         environment = provider._epays_get_environment()
         gateway_id = self._epays_get_gateway_id(environment)
+        lang = self._epays_get_lang(self.env.context.get('lang'))
 
         # One live ePays payment per order: going back and paying again reuses the pending payment.
-        reused_payment_url = self._epays_reuse_or_retire_earlier_payment(environment, gateway_id)
+        reused_payment_url = self._epays_reuse_or_retire_earlier_payment(
+            environment, gateway_id, lang=lang
+        )
         if reused_payment_url:
             return self._epays_get_redirect_values(reused_payment_url)
 
@@ -203,9 +206,7 @@ class PaymentTransaction(models.Model):
             environment=environment,
             domain=domain,
             payload=payload,
-            idempotency_key=payment_utils.generate_idempotency_key(
-                self, scope='payment_request_epays'
-            ),
+            idempotency_key=self._epays_get_idempotency_key(),
         )
 
         payment_id = payment_data.get('paymentId')
@@ -233,6 +234,27 @@ class PaymentTransaction(models.Model):
         })
         self._epays_cancel_replaced_transactions()
         return self._epays_get_redirect_values(redirect_url)
+
+    def _epays_get_idempotency_key(self):
+        """ Return the idempotency key of the payment request of this attempt.
+
+        Odoo's key is made from the transaction reference, and a reference comes back after a
+        rollback: when ePays answers too late, the request fails, the transaction is rolled back
+        and the customer's next click creates one with the same reference. If ePays created the
+        payment anyway, that next request carries the same key with a new expiry, and ePays
+        refuses it (409 IDEMPOTENCY_CONFLICT) on every click until the key expires. The record id
+        comes from a sequence that a rollback does not rewind, so each attempt has its own key,
+        while one attempt still sends one key.
+
+        Note: self.ensure_one()
+
+        :return: The idempotency key.
+        :rtype: str
+        """
+        self.ensure_one()
+        return payment_utils.generate_idempotency_key(
+            self, scope=f'payment_request_epays_{self.id}'
+        )
 
     @api.model
     def _epays_get_redirect_values(self, redirect_url):
@@ -275,7 +297,7 @@ class PaymentTransaction(models.Model):
             *document_domain,
         ], order='id desc', limit=1)
 
-    def _epays_reuse_or_retire_earlier_payment(self, environment, gateway_id=None):
+    def _epays_reuse_or_retire_earlier_payment(self, environment, gateway_id=None, lang=None):
         """ Reuse the pending ePays payment of an earlier attempt on the same documents, or retire
         it.
 
@@ -283,11 +305,12 @@ class PaymentTransaction(models.Model):
         the cart. Without this, each click would create one more payable ePays payment for the
         same order. The newest earlier attempt is checked with ePays:
 
-        - pending with the same amount, currency and gateway: this transaction takes over its
-          payment page;
-        - pending with another amount (the cart changed) or opened for another gateway (the
-          customer chose another payment method): its payment is voided before a new one is
-          created; if ePays refuses the void, the payment is read again and nothing new is created;
+        - pending with the same amount, currency, gateway and language: this transaction takes
+          over its payment page;
+        - pending with another amount (the cart changed), opened for another gateway (the
+          customer chose another payment method) or in another language (the customer switched
+          the website's language): its payment is voided before a new one is created; if ePays
+          refuses the void, the payment is read again and nothing new is created;
         - unknown status (possibly a raw gateway word for a completed capture): handled like a
           pending payment that cannot be reused; ePays voids only a pending payment, so a paid
           one cannot be voided and no second payment is created for it;
@@ -302,6 +325,7 @@ class PaymentTransaction(models.Model):
 
         :param str environment: The environment this transaction would use.
         :param str gateway_id: The ePays gateway this transaction would open, if any.
+        :param str lang: The language this transaction would open the page in (`en` or `ar`).
         :return: The payment page to redirect to if a payment was reused, `None` otherwise.
         :rtype: str|None
         :raise ValidationError: If the order is already paid, or if ePays cannot be reached.
@@ -319,10 +343,15 @@ class PaymentTransaction(models.Model):
         amount_changed = bool(self._epays_get_amount_mismatches(payment_data))
         # A page opened for one gateway (e.g. Card) shows that gateway only.
         method_changed = (candidate.epays_gateway_requested or None) != (gateway_id or None)
+        # The page and every message about the payment are in the language it was opened in. A
+        # server that does not report it (no `paymentLang`) never retires a payment for it.
+        page_lang = payment_data.get('paymentLang')
+        lang_changed = bool(lang) and page_lang in ('en', 'ar') and page_lang != lang
         is_reusable = (
             target_state == 'pending'
             and not amount_changed
             and not method_changed
+            and not lang_changed
             and candidate._epays_is_valid_redirect_url(
                 candidate.epays_payment_url, candidate.epays_environment
             )
@@ -338,6 +367,7 @@ class PaymentTransaction(models.Model):
                 candidate._set_canceled(self._epays_get_replaced_message(
                     amount_changed=target_state == 'pending' and amount_changed,
                     method_changed=target_state == 'pending' and method_changed,
+                    lang_changed=target_state == 'pending' and lang_changed,
                 ))
                 return None
             payment_data = candidate._epays_fetch_payment_details()
@@ -371,12 +401,16 @@ class PaymentTransaction(models.Model):
             SQL("SELECT id FROM payment_transaction WHERE id IN %s FOR UPDATE", tuple(self.ids))
         )
 
-    def _epays_get_replaced_message(self, amount_changed=False, method_changed=False):
+    def _epays_get_replaced_message(
+        self, amount_changed=False, method_changed=False, lang_changed=False
+    ):
         """ Return the state message of an earlier transaction replaced by this one. """
         if amount_changed:
             message = _("Replaced by transaction %s (amount changed).", self.reference)
         elif method_changed:
             message = _("Replaced by transaction %s (payment method changed).", self.reference)
+        elif lang_changed:
+            message = _("Replaced by transaction %s (language changed).", self.reference)
         else:
             message = _("Replaced by transaction %s.", self.reference)
         return "ePays: " + message
@@ -498,16 +532,36 @@ class PaymentTransaction(models.Model):
         on its documents instead.
 
         :param str outcome: `declined`, `cancelled`, `mismatch` or `refunded`.
-        :param dict payment_data: The `data` of the v2 payment details, for a decline.
+        :param dict payment_data: The `data` of the v2 payment details.
         :return: The message.
         :rtype: str
         """
         self.ensure_one()
-        tx = self.with_context(lang=self._epays_get_customer_lang_code())
-        return tx._epays_compose_customer_message(outcome, payment_data or {})
+        payment_data = payment_data or {}
+        lang = self._epays_get_payment_lang(payment_data)
+        tx = self.with_context(lang=self._epays_get_customer_lang_code(lang))
+        return tx._epays_compose_customer_message(outcome, payment_data, lang)
 
-    def _epays_compose_customer_message(self, outcome, payment_data):
-        """ Compose the message of `_epays_get_customer_message` in the language of the context. """
+    def _epays_get_payment_lang(self, payment_data):
+        """ Return the language the customer paid in: the one ePays reports the page was opened in
+        (`paymentLang`), else the one the addon would choose for the customer.
+
+        A customer paying from the Arabic website is answered in Arabic even if their contact is in
+        English. The result arrives on requests that carry no website language (the return from
+        ePays and its server notification), so the language cannot be read from the request.
+
+        :param dict payment_data: The `data` of the v2 payment details.
+        :return: `en` or `ar`.
+        :rtype: str
+        """
+        payment_lang = payment_data.get('paymentLang')
+        if payment_lang in ('en', 'ar'):
+            return payment_lang
+        return self._epays_get_lang()
+
+    def _epays_compose_customer_message(self, outcome, payment_data, lang):
+        """ Compose the message of `_epays_get_customer_message` in the language of the context,
+        with ePays's decline reason in `lang` (`en` or `ar`). """
         if outcome == 'mismatch':
             # Money may have been taken: the customer must not simply pay again.
             return _(
@@ -522,9 +576,7 @@ class PaymentTransaction(models.Model):
         if outcome == 'cancelled':
             what_happened = _("Your payment was cancelled.")
         else:
-            reason = self._epays_get_response_description(
-                payment_data, lang=self._epays_get_lang()
-            )
+            reason = self._epays_get_response_description(payment_data, lang=lang)
             if reason:
                 what_happened = _("Your payment was declined: %s.", reason.rstrip('. '))
             else:
@@ -533,10 +585,9 @@ class PaymentTransaction(models.Model):
             what_happened, _("You can try again or choose another payment method."),
         ))
 
-    def _epays_get_customer_lang_code(self):
-        """ Return the installed Odoo language matching the ePays page language (`en` or `ar`),
+    def _epays_get_customer_lang_code(self, epays_lang):
+        """ Return the installed Odoo language matching an ePays language (`en` or `ar`),
         preferring the customer's own variant, e.g. `ar_001`. """
-        epays_lang = self._epays_get_lang()
         installed_codes = [code for code, _name in self.env['res.lang'].get_installed()]
         matching_codes = [
             code for code in (self.partner_lang, self.env.lang, *installed_codes)
@@ -728,7 +779,9 @@ class PaymentTransaction(models.Model):
                     "the ePays payment of transaction %s was refunded before Odoo recorded it; "
                     "not completing the order", self.reference,
                 )
-                updated_txs = self._set_error(self._epays_get_customer_message('refunded'))
+                updated_txs = self._set_error(
+                    self._epays_get_customer_message('refunded', payment_data)
+                )
         elif target_state == 'pending':
             if self.state == 'draft':
                 updated_txs = self._set_pending()
@@ -737,7 +790,9 @@ class PaymentTransaction(models.Model):
                 self._epays_get_customer_message('declined', payment_data)
             )
         elif target_state == 'cancel':
-            updated_txs = self._set_canceled(self._epays_get_customer_message('cancelled'))
+            updated_txs = self._set_canceled(
+                self._epays_get_customer_message('cancelled', payment_data)
+            )
         else:
             _logger.warning(
                 "received data with unrecognised payment status (%s) for transaction with "
@@ -771,7 +826,7 @@ class PaymentTransaction(models.Model):
             custom_fields.get('udf2'), custom_fields.get('udf3'),
             self.amount, self.currency_id.name, self.epays_udf2, self.epays_udf3,
         )
-        return self._set_error(self._epays_get_customer_message('mismatch'))
+        return self._set_error(self._epays_get_customer_message('mismatch', payment_data))
 
     def _epays_update_payment_method(self, gateway_id):
         """ Set the payment method from the ePays gateway that took the payment, when it is a synced

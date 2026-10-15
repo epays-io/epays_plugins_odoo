@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0-20260908\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-26 11:12+0000\n"
+"POT-Creation-Date: 2026-10-15 04:13+0000\n"
 "PO-Revision-Date: 2026-09-26 11:12+0000\n"
 "Last-Translator: \n"
 "Language-Team: Arabic\n"
@@ -272,6 +272,11 @@ msgid "Google Pay"
 msgstr "Google Pay"
 
 #. module: payment_epays
+#: model:ir.model,name:payment_epays.model_ir_http
+msgid "HTTP Routing"
+msgstr "مسار HTTP"
+
+#. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_link_expiry
 msgid "How long the customer has to complete the payment on the ePays page."
 msgstr "المدة المتاحة للعميل لإتمام الدفع على صفحة ePays."
@@ -429,6 +434,12 @@ msgstr "تم استلام بيانات بدون معرّف الدفع."
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "Replaced by transaction %s (amount changed)."
 msgstr "استُبدلت بالمعاملة %s (تغيّر المبلغ)."
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Replaced by transaction %s (language changed)."
+msgstr "استُبدلت بالمعاملة %s (تغيّرت اللغة)."
 
 #. module: payment_epays
 #. odoo-python

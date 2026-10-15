@@ -88,7 +88,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(call['domain'], 'shop.example.com')
         self.assertEqual(
             call['idempotency_key'],
-            payment_utils.generate_idempotency_key(tx, scope='payment_request_epays'),
+            payment_utils.generate_idempotency_key(tx, scope=f'payment_request_epays_{tx.id}'),
         )
         self.assertEqual(payload['amount'], '137.000', "The amount is a string at 3 decimals.")
         self.assertEqual(payload['currency'], 'BHD')
@@ -113,6 +113,33 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         )
         calls, _values = self._initiate(tx)
         return calls[0]['payload'].get('gatewayId')
+
+    @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
+    def test_a_retry_after_a_timeout_sends_a_new_idempotency_key(self):
+        """ ePays answered too late: the request failed and was rolled back, though ePays may have
+        created the payment. The next click gets the same reference back and must not resend the
+        key with a new payload, or ePays refuses every click (409 IDEMPOTENCY_CONFLICT). """
+        keys = []
+
+        def handler(provider, method, path, **kwargs):
+            keys.append(kwargs['idempotency_key'])
+            if len(keys) == 1:
+                raise EpaysApiError(
+                    "ePays: Could not establish the connection to the API.",
+                    connection_error="Read timed out.",
+                )
+            return {'paymentId': self.payment_id, 'redirect': self.redirect_url}
+
+        with self._patch_make_request(handler):
+            with self.assertRaises(ValidationError), self.env.cr.savepoint():
+                self._create_transaction('redirect', reference='S00074-1')._get_processing_values()
+            self.env.invalidate_all()
+            tx = self._create_transaction('redirect', reference='S00074-1')
+            tx._get_processing_values()
+
+        self.assertEqual(len(keys), 2)
+        self.assertNotEqual(keys[0], keys[1])
+        self.assertEqual(tx.provider_reference, self.payment_id)
 
     @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
     def test_payment_request_gateway_id_per_method(self):
@@ -595,6 +622,78 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             self.assertEqual(len(note), 1)
             self.assertNotIn('<hr', note.body)
             self.assertNotIn('Card Brand', note.body)
+
+    def _activate_arabic(self):
+        self.env['res.lang']._activate_lang('ar_001')
+        self.env['ir.module.module']._load_module_terms(['payment_epays'], ['ar_001'])
+
+    @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
+    def test_a_customer_paying_from_the_arabic_website_is_answered_in_arabic(self):
+        """ The contact is in English, the website in Arabic: the page opens in Arabic, and so does
+        everything the customer is told afterwards. The return from ePays carries no website
+        language: ePays reports the page's (`paymentLang`). """
+        self._activate_arabic()
+        self.partner.lang = 'en_US'
+        tx = self._create_transaction('redirect', reference=self._new_reference())
+
+        calls, _values = self._initiate(tx.with_context(lang='ar_001'))
+
+        self.assertEqual(calls[0]['payload']['lang'], 'ar')
+        declined = self._payment_data(
+            tx, status='Failed', result='DECLINED', responseCode='05', paymentLang='ar',
+            responseDescription={'en': "Do not honour", 'ar': "مرفوض"},
+        )
+        with self._patch_payment_details(declined):
+            tx.with_context(lang='en_US')._handle_notification_data(
+                'epays', {'paymentId': tx.provider_reference}
+            )
+        self.assertEqual(
+            tx.state_message,
+            "تم رفض الدفع: مرفوض. يمكنك المحاولة مرة أخرى أو اختيار طريقة دفع أخرى.",
+        )
+
+    @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
+    def test_every_message_follows_the_page_language_reported_by_epays(self):
+        """ `paymentLang` decides, both ways and for every outcome; without it (an older ePays
+        server) the customer's own language is used. """
+        self._activate_arabic()
+        description = {'responseDescription': {'en': "Do not honour", 'ar': "مرفوض"}}
+        rows = [
+            # (contact language, paymentLang, outcome, expected start of the message)
+            ('en_US', 'ar', {'status': 'Failed', **description}, "تم رفض الدفع: مرفوض."),
+            ('ar_001', 'en', {'status': 'Failed', **description}, "Your payment was declined: Do"),
+            ('en_US', 'ar', {'status': 'Cancelled'}, "تم إلغاء الدفع."),
+            ('ar_001', None, {'status': 'Failed', **description}, "تم رفض الدفع: مرفوض."),
+            ('en_US', None, {'status': 'Failed', **description}, "Your payment was declined: Do"),
+        ]
+        for contact_lang, payment_lang, outcome, expected in rows:
+            with self.subTest(
+                contact=contact_lang, paymentLang=payment_lang, status=outcome['status']
+            ):
+                self.partner.lang = contact_lang
+                tx = self._create_epays_transaction()
+                data = self._payment_data(tx, result='', **outcome)
+                if payment_lang:
+                    data['paymentLang'] = payment_lang
+                with self._patch_payment_details(data):
+                    tx.with_context(lang='en_US')._handle_notification_data(
+                        'epays', {'paymentId': tx.provider_reference}
+                    )
+                self.assertTrue(tx.state_message.startswith(expected), tx.state_message)
+
+    def test_the_website_loads_the_addon_translations(self):
+        """ The heading of the failure message on the payment step is translated in JavaScript,
+        from the modules the website lists. """
+        ir_http = self.env['ir.http']
+        if 'website' not in self.env:
+            modules = ir_http._get_translation_frontend_modules_name()
+        else:
+            # The website's override lists its own modules from the request's registry. Imported
+            # here: the website is an optional dependency.
+            from odoo.addons.website.tools import MockRequest  # noqa: PLC0415
+            with MockRequest(self.env):
+                modules = ir_http._get_translation_frontend_modules_name()
+        self.assertIn('payment_epays', modules)
 
     @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
     def test_decline_shows_the_description_in_the_customer_language(self):
@@ -1894,14 +1993,17 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             **values,
         })
 
-    def _pay_again(self, get_responses=(), delete_response=None, **tx_values):
+    def _pay_again(self, get_responses=(), delete_response=None, lang=None, **tx_values):
         """ Click on Pay again: create a new transaction and render its redirect form.
 
         :param list get_responses: The successive answers to GET, as dicts or exceptions.
         :param delete_response: The answer to DELETE, as a dict or an exception.
+        :param str lang: The language of the website the customer clicks on, if not the default.
         :return: The new transaction, the calls made to ePays and the processing values.
         """
         tx = self._create_transaction('redirect', reference=False, **tx_values)
+        if lang:
+            tx = tx.with_context(lang=lang)
         calls = []
         get_responses = list(get_responses)
 
@@ -2011,6 +2113,40 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                 self.assertEqual(tx.provider_reference, 'PAY-NEW')
                 self.assertEqual(tx.epays_gateway_requested, expected_gateway)
                 tx.state = 'cancel'  # Keep it out of the next rows.
+
+    def test_pay_again_in_another_language_opens_a_new_page(self):
+        """ The customer switched the website's language: the page in the old language is voided
+        and a new one opens in the new language, so the page and the messages match the site. """
+        self._skip_without_sale()
+        self._activate_arabic()
+        order = self._create_sale_order()
+        first = self._earlier_attempt(order, state='pending')
+        pending = self._payment_data(first, status='Pending', result='', paymentLang='en')
+        voided = {'paymentId': first.provider_reference, 'status': 'Voided'}
+
+        tx, calls, _values = self._pay_again(
+            [pending], delete_response=voided, lang='ar_001', **self._order_values(order)
+        )
+
+        self.assertEqual([method for method, _path in calls], ['GET', 'DELETE', 'POST'])
+        self.assertEqual(first.state, 'cancel')
+        # Written in the language of the click, here the Arabic website's.
+        self.assertEqual(
+            first.state_message, f"ePays: استُبدلت بالمعاملة {tx.reference} (تغيّرت اللغة).",
+        )
+        self.assertEqual(tx.provider_reference, 'PAY-NEW')
+
+    def test_pay_again_in_the_same_language_reuses_its_page(self):
+        self._skip_without_sale()
+        self._activate_arabic()
+        order = self._create_sale_order()
+        first = self._earlier_attempt(order, state='pending')
+        pending = self._payment_data(first, status='Pending', result='', paymentLang='ar')
+
+        tx, calls, _values = self._pay_again([pending], lang='ar_001', **self._order_values(order))
+
+        self.assertEqual([method for method, _path in calls], ['GET'])
+        self.assertEqual(tx.provider_reference, first.provider_reference)
 
     def test_pay_again_with_the_same_payment_method_reuses_its_page(self):
         self._skip_without_sale()
