@@ -32,13 +32,13 @@ remains is shipping it, the ePays-side release steps below, and real payment met
       `18.0.1.0.1` and `18.0.1.0.3` stay.
 - [x] Download the zip from the store and install it on a fresh Odoo 18: identical to the
       repository, installed cleanly with `website_sale` and `account_payment` (2026-09-26).
-- [ ] **Scan error on 2026-09-28**: the store reports *No module found in repository
-      `ssh://git@github.com/epays-io/epays_plugins_odoo.git#18.0`*. The repository is not the
-      cause: `18.0` is public, `payment_epays/` is at its root, the manifest parses, and nothing
-      was pushed after the successful scan of 2026-09-26. The failing URL ends in `.git`, the registered one
-      does not, so it is probably a second entry for the same repository. Check the repositories
-      in the apps.odoo.com account: delete the duplicate and re-scan the original; if it still
-      fails, write to apps@odoo.com.
+- [x] **Scan error on 2026-09-28**: resolved; the store scanned 18.0.1.0.4 and, on 2026-10-20,
+      18.0.1.0.5.
+- [x] **18.0.1.0.5 from the store** (2026-10-20): the downloaded zip is identical to commit
+      `e3b74fa`; installed on fresh Odoo 18 databases (131 tests alone, 136 with `website_sale` and
+      `account_payment`, all green); run on the test shop against the local ePays API: Sync from
+      ePays (6 gateways), a Card payment opening only the card form and confirming the order, and
+      an Arabic decline in Arabic for a customer whose contact is in English.
 
 ## 3. Release order with the ePays core API (2026-10-20)
 
