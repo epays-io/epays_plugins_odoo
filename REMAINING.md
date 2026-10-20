@@ -1,9 +1,12 @@
 # ePays for Odoo — what is left
 
-Status on 2026-09-26. The addon (`payment_epays` 18.0.1.0.3) is feature-complete and tested:
-121 tests with sales and accounting, 116 with the module alone, lint and store checks clean,
-installed and upgraded from the release zip on fresh databases. What remains is shipping it and
-testing it with real payment methods.
+Status on 2026-10-20. The addon (`payment_epays` 18.0.1.0.5) is feature-complete and tested:
+136 tests with sales and accounting, 131 with the module alone, lint and store checks clean,
+upgraded from 18.0.1.0.3 and 18.0.1.0.4 (command line and Apps > Upgrade). End-to-end against the
+local ePays core API (new v2 names) and the sandbox (old names): shop approval, decline and cancel
+in English and Arabic, the individual Card method, Sync from ePays, a USD invoice paid from its
+portal link (charged in BHD), a payment request answered too late and its orphan voided. What
+remains is shipping it, the ePays-side release steps below, and real payment methods.
 
 ## 1. Tests still to do
 
@@ -37,7 +40,26 @@ testing it with real payment methods.
       in the apps.odoo.com account: delete the duplicate and re-scan the original; if it still
       fails, write to apps@odoo.com.
 
-## 3. Onboard each merchant (ePays side)
+## 3. Release order with the ePays core API (2026-10-20)
+
+- [ ] **Publish 18.0.1.0.5 before the ePays API of 2026-10-18 reaches production.** That API
+      renamed v2 fields (`gatewayId`/`merchantGateway` → `subscriptionId`, gateway type
+      `gatewayId` → `gatewayTypeId`, `paidAt` → `completedAt`, statuses in snake case). On it,
+      18.0.1.0.3 and 18.0.1.0.4 lose every synced gateway on *Sync from ePays* (and with them the
+      individual payment methods) and open the full ePays page for Card, Benefit, etc.
+      18.0.1.0.5 reads and sends both names.
+- [ ] **ePays deploy runs `flyway migrate`**: `V20261018_1000` (idempotency `response_location`;
+      without it payment creation took up to 15.8 s and Odoo timed out), `V20261015_0800`
+      (double-encoded Arabic decline reasons), `V20261015_0700` (Arabic error messages). The
+      sandbox has none of them yet: its Arabic declines fall back to the generic error.
+- [ ] **ePays decisions** (eCore repository): keep the old v2 names for a while for merchants on
+      older addon versions; log or refuse unknown request fields (a rename broke features with no
+      error); record the payer's language switch on the ePays page (`paymentLang` stays the one
+      Odoo sent, so the messages follow the website's language, not the switch).
+- [ ] **Sandbox payment list ignores `status` and `udf2`** and omits them from its items, so the
+      orphan cleanup voids nothing there until it gets the current API.
+
+## 4. Onboard each merchant (ePays side)
 
 For every shop that uses the addon:
 
@@ -47,7 +69,7 @@ For every shop that uses the addon:
       The admin gets the IP from *Find this server's IP address* on the provider form.
 - [ ] On Odoo.sh, re-check the IP after the project moves servers: the outbound address can change.
 
-## 4. Decisions still open
+## 5. Decisions still open
 
 - [ ] **Arabic translations**: written by the developer; have a native speaker review
       `payment_epays/i18n/ar.po`.
@@ -60,7 +82,7 @@ For every shop that uses the addon:
       Settings > *Automatic Currency Rates*); include it in merchant onboarding?
 - [ ] **Refunds**: out of scope for this version (payments only).
 
-## 5. Clean up the development environment
+## 6. Clean up the development environment
 
 - [ ] Docker containers `epays-e2e-odoo` and `epays-e2e-pg`, and the volume `epays-e2e-data`:
       `docker rm -f epays-e2e-odoo epays-e2e-pg && docker volume rm epays-e2e-data`.
