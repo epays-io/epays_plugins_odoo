@@ -61,13 +61,19 @@ early for other providers.
      amount/currency/udf fields to match (`_epays_get_mismatches`), otherwise error.
   4. `_cron_epays_poll_pending` (`data/ir_cron.xml`) polls pending transactions in an age window and
      voids expired links on ePays.
+  5. A payment request that times out (`const.PAYMENT_REQUEST_TIMEOUT`) is rolled back, but ePays
+     may still create the payment. `payment.epays.unanswered.request` records it in its own cursor
+     (it must survive the rollback), and the cron voids the order's pending payments that no
+     transaction holds (`GET /api/v2/Payments?status=pending&udf2=…`). Each attempt has its own
+     idempotency key (`_epays_get_idempotency_key`): the rolled-back reference comes back. Tests
+     for it cannot use Odoo's `assertRaises`, which rolls the separate cursor's write back too.
 - **Currency**: ePays only charges `BHD` (`const.CHARGE_CURRENCY`); other currencies are converted
   with Odoo rates at initiation and the conversion recorded on the transaction.
 - **Payment methods** (`data/payment_method_data.xml`, `models/payment_method.py`): one generic
   "ePays" method (customer picks on the ePays page, with brand icons) plus individual methods
-  (card, Benefit, BenefitPay, Apple Pay, …) that send a v2 `gatewayId` to open one gateway directly;
-  these are only offered when a matching active synced gateway exists. Gateway type → method code is
-  `const.GATEWAY_TYPE_PAYMENT_METHOD_CODES`.
+  (card, Benefit, BenefitPay, Apple Pay, …) that send the gateway's v2 `subscriptionId` to open it
+  directly; these are only offered when a matching active synced gateway exists. Gateway type →
+  method code is `const.GATEWAY_TYPE_PAYMENT_METHOD_CODES`.
 - **Controllers** (`controllers/main.py`): the return route, and a `PaymentPostProcessing`
   override that sends failed/cancelled shop payments back to `/shop/payment?epays_failed=1`, where
   `static/src/js/payment_form.js` fetches the reason from `/payment/epays/failure`. The JS also hides
@@ -78,6 +84,13 @@ early for other providers.
   helpers.
 
 ## Rules that are easy to break
+
+- **ePays renames v2 fields.** On 2026-10-18 `gatewayId`/`merchantGateway` became `subscriptionId`,
+  the gateway type `gatewayId` became `gatewayTypeId`, `paidAt` became `completedAt`, and statuses
+  went snake case. Servers update at different times, so read new and old names with
+  `epays_utils.get_first(data, new, old)`, send both in requests (ePays ignores unknown fields), and
+  compare statuses case-insensitively. ePays ignores unknown request fields silently: a rename
+  breaks features without an error, so check eCore's DTOs when it changes.
 
 - **Do not add stored fields to `payment.provider`.** A new column makes *Apps > Upgrade* fail on
   databases that lack it (Odoo recomputes provider colour, reading every column, before the upgrade

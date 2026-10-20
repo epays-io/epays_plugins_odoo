@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0-20260908\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-15 05:06+0000\n"
-"PO-Revision-Date: 2026-10-15 05:06+0000\n"
+"POT-Creation-Date: 2026-10-20 04:36+0000\n"
+"PO-Revision-Date: 2026-10-20 04:36+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -166,11 +166,13 @@ msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__create_uid
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__create_uid
 msgid "Created by"
 msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__create_date
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__create_date
 msgid "Created on"
 msgstr ""
 
@@ -186,6 +188,7 @@ msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__display_name
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__display_name
 msgid "Display Name"
 msgstr ""
 
@@ -203,6 +206,7 @@ msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__environment
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__environment
 msgid "Environment"
 msgstr ""
 
@@ -268,6 +272,7 @@ msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__id
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__id
 msgid "ID"
 msgstr ""
 
@@ -278,11 +283,13 @@ msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__write_uid
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__write_uid
 msgid "Last Updated by"
 msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__write_date
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__write_date
 msgid "Last Updated on"
 msgstr ""
 
@@ -303,6 +310,7 @@ msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_gateway__environment__localhost
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_unanswered_request__environment__localhost
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_mode__localhost
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_transaction__epays_environment__localhost
 msgid "Localhost"
@@ -322,6 +330,7 @@ msgid "Mastercard"
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__merchant_domain
 #: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_merchant_domain
 msgid "Merchant Domain"
 msgstr ""
@@ -341,6 +350,11 @@ msgstr ""
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "Order Amount"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__udf2
+msgid "Order References"
 msgstr ""
 
 #. module: payment_epays
@@ -396,6 +410,7 @@ msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_gateway__environment__production
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_unanswered_request__environment__production
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_mode__production
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_transaction__epays_environment__production
 msgid "Production"
@@ -403,6 +418,7 @@ msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__provider_id
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__provider_id
 msgid "Provider"
 msgstr ""
 
@@ -469,6 +485,7 @@ msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_gateway__environment__sandbox
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_unanswered_request__environment__sandbox
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_mode__sandbox
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_transaction__epays_environment__sandbox
 msgid "Sandbox"
@@ -721,6 +738,11 @@ msgid "Transaction ID"
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__reference
+msgid "Transaction Reference"
+msgstr ""
+
+#. module: payment_epays
 #: model:payment.method,name:payment_epays.payment_method_epays_brand_visa
 #: model:payment.method,name:payment_epays.payment_method_epays_card_visa
 msgid "VISA"
@@ -858,6 +880,11 @@ msgid "ePays Transaction ID"
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model,name:payment_epays.model_payment_epays_unanswered_request
+msgid "ePays Unanswered Payment Request"
+msgstr ""
+
+#. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid "ePays answered with HTTP %(status)s %(code)s %(message)s"
@@ -885,6 +912,14 @@ msgstr ""
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "ePays payment details for transaction %s"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"ePays returned gateways in a format this version of the addon cannot read, "
+"so nothing was changed. Update the ePays addon."
 msgstr ""
 
 #. module: payment_epays

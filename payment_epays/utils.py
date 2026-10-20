@@ -2,6 +2,7 @@
 
 import json
 import re
+from datetime import datetime, timezone
 
 from odoo.exceptions import ValidationError
 
@@ -17,9 +18,11 @@ class EpaysApiError(ValidationError):
 
     def __init__(
         self, message, *, http_status=None, error_code=None, error_message=None, details=None,
-        connection_error=None,
+        connection_error=None, timed_out=False,
     ):
         super().__init__(message)
+        # The request was sent but not answered in time: ePays may still have processed it.
+        self.timed_out = timed_out
         self.http_status = http_status
         self.error_code = error_code or ''
         self.error_message = error_message or ''
@@ -96,6 +99,59 @@ def humanize_key(key):
         return const.GATEWAY_RESPONSE_LABELS[key]
     words = re.sub(r'(?<=[a-z0-9])(?=[A-Z])|[_\-]+', ' ', str(key)).split()
     return ' '.join(word[:1].upper() + word[1:] for word in words)
+
+
+def get_first(data, *keys):
+    """ Return the first value that carries information among `keys`, e.g. a v2 field and the name
+    it had before.
+
+    ePays renamed v2 fields on 2026-10-18 (`gatewayId` and `merchantGateway` became
+    `subscriptionId`, the gateway type `gatewayId` became `gatewayTypeId`, `paidAt` became
+    `completedAt`). A server not updated yet still sends the former names, so both are read, the
+    new one first.
+
+    :param dict data: The data received from ePays.
+    :param str keys: The field names, the current one first.
+    :return: The value, or `None`.
+    """
+    for key in keys:
+        value = data.get(key)
+        if not is_empty(value):
+            return value
+    return None
+
+
+def parse_datetime(value):
+    """ Return an ePays timestamp as an aware UTC datetime.
+
+    ePays writes ISO 8601 with an offset, e.g. `2026-10-19T22:52:33+03:00`; a timestamp without one
+    is in Bahrain time.
+
+    :param str value: The timestamp.
+    :return: The datetime in UTC, or `None` if the value is not a timestamp.
+    :rtype: datetime|None
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = (parsed - const.EPAYS_TIMEZONE_OFFSET).replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def humanize_status(status):
+    """ Return a v2 status as a reader expects it: ePays sends `completed` since 2026-10-18 (snake
+    case), `Completed` before.
+
+    :param str status: The `status` of the payment details.
+    :return: The status, capitalised when ePays sent it in lower case.
+    :rtype: str
+    """
+    text = str(status).strip().replace('_', ' ')
+    return text[:1].upper() + text[1:] if text.islower() else text
 
 
 def is_empty(value):

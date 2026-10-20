@@ -14,6 +14,7 @@ from odoo.exceptions import AccessError, ValidationError
 from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment.const import REPORT_REASONS_MAPPING
 from odoo.addons.payment_epays import const
+from odoo.addons.payment_epays import utils as epays_utils
 from odoo.addons.payment_epays.utils import EpaysApiError
 
 _logger = logging.getLogger(__name__)
@@ -483,7 +484,8 @@ class PaymentProvider(models.Model):
         return "ePays: " + _("Could not establish the connection to the API.")
 
     def _epays_make_request(
-        self, method, path, *, environment, domain, payload=None, idempotency_key=None
+        self, method, path, *, environment, domain, payload=None, idempotency_key=None,
+        timeout=None,
     ):
         """ Make a request to the ePays v2 API and return the `data` of the response envelope.
 
@@ -496,6 +498,7 @@ class PaymentProvider(models.Model):
         :param str domain: The merchant domain to authenticate with.
         :param dict payload: The JSON payload of the request, if any.
         :param str idempotency_key: The idempotency key of the request, if any.
+        :param int timeout: The seconds to wait for the answer; `const.REQUEST_TIMEOUT` by default.
         :return: The `data` of the response.
         :rtype: dict
         :raise EpaysApiError: If the request fails for any reason. The message is generic; the
@@ -526,8 +529,8 @@ class PaymentProvider(models.Model):
             # Redirects are refused: `requests` would resend the master key header to the new host,
             # as it strips only the standard `Authorization` header.
             response = requests.request(
-                method, url, json=payload, headers=headers, timeout=const.REQUEST_TIMEOUT,
-                allow_redirects=False,
+                method, url, json=payload, headers=headers,
+                timeout=timeout or const.REQUEST_TIMEOUT, allow_redirects=False,
             )
         except requests.exceptions.RequestException as error:
             # Neither the traceback nor the exception chain is kept: `requests` repeats an invalid
@@ -536,7 +539,10 @@ class PaymentProvider(models.Model):
             if isinstance(error, requests.exceptions.InvalidHeader):
                 reason = "invalid credentials format"
             _logger.warning("unable to reach endpoint at %s: %s", url, reason)
-            raise EpaysApiError(generic_message, connection_error=reason) from None
+            raise EpaysApiError(
+                generic_message, connection_error=reason,
+                timed_out=isinstance(error, requests.exceptions.ReadTimeout),
+            ) from None
 
         if 300 <= response.status_code < 400:
             _logger.warning(
@@ -772,15 +778,41 @@ class PaymentProvider(models.Model):
             )
 
         gateways = data.get('gateways')
-        found, mapped = self._epays_update_gateways(
-            environment, gateways if isinstance(gateways, list) else []
-        )
+        gateways = gateways if isinstance(gateways, list) else []
+        if gateways and not any(self._epays_get_gateway_ref(gateway) for gateway in gateways):
+            # Gateways listed in names this version cannot read: syncing would drop every row, and
+            # with them the payment methods offered at checkout.
+            _logger.warning(
+                "none of the %s gateways returned by ePays has a subscription id this version can "
+                "read; leaving the gateway table unchanged", len(gateways),
+            )
+            return self._epays_notification(
+                title,
+                _("ePays returned gateways in a format this version of the addon cannot read, so "
+                  "nothing was changed. Update the ePays addon."),
+                'warning',
+            )
+        found, mapped = self._epays_update_gateways(environment, gateways)
         return self._epays_notification(
             title,
             _("%(found)s gateways found on ePays, %(mapped)s linked to a payment method.",
               found=found, mapped=mapped),
             'success',
         )
+
+    @api.model
+    def _epays_get_gateway_ref(self, gateway):
+        """ Return the subscription id of a gateway of `GET /api/v2/gateways`, or `''`.
+
+        :param dict gateway: A gateway of the response.
+        :return: `subscriptionId`, or `merchantGateway` from a server that predates the rename of
+                 2026-10-18.
+        :rtype: str
+        """
+        if not isinstance(gateway, dict):
+            return ''
+        gateway_ref = epays_utils.get_first(gateway, 'subscriptionId', 'merchantGateway')
+        return str(gateway_ref or '').strip()
 
     def _epays_update_gateways(self, environment, gateways):
         """ Upsert the gateway rows of an environment from the list returned by ePays.
@@ -807,12 +839,10 @@ class PaymentProvider(models.Model):
 
         kept_rows = Gateway
         for gateway in gateways:
-            if not isinstance(gateway, dict):
-                continue
-            gateway_ref = str(gateway.get('merchantGateway') or '').strip()
+            gateway_ref = self._epays_get_gateway_ref(gateway)
             if not gateway_ref or gateway_ref in kept_rows.mapped('gateway_ref'):
                 continue
-            gateway_type_id = _to_int(gateway.get('gatewayId'))
+            gateway_type_id = _to_int(epays_utils.get_first(gateway, 'gatewayTypeId', 'gatewayId'))
             if gateway_type_id in const.NON_CHECKOUT_GATEWAY_TYPES:
                 continue  # An integration, not a checkout payment method.
             values = {

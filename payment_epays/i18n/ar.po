@@ -179,11 +179,13 @@ msgstr "تاريخ الإنشاء"
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__create_uid
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__create_uid
 msgid "Created by"
 msgstr "أنشئ بواسطة"
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__create_date
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__create_date
 msgid "Created on"
 msgstr "أنشئ في"
 
@@ -199,6 +201,7 @@ msgstr "لغة العميل"
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__display_name
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__display_name
 msgid "Display Name"
 msgstr "اسم العرض"
 
@@ -218,6 +221,7 @@ msgstr "الإنجليزية"
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__environment
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__environment
 msgid "Environment"
 msgstr "البيئة"
 
@@ -283,6 +287,7 @@ msgstr "المدة المتاحة للعميل لإتمام الدفع على ص
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__id
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__id
 msgid "ID"
 msgstr "المعرّف"
 
@@ -293,11 +298,13 @@ msgstr "الفواتير المرسلة (udf3)"
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__write_uid
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__write_uid
 msgid "Last Updated by"
 msgstr "آخر تحديث بواسطة"
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__write_date
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__write_date
 msgid "Last Updated on"
 msgstr "آخر تحديث في"
 
@@ -318,6 +325,7 @@ msgstr "اتركه فارغًا لاستخدام نطاق الموقع الإل�
 
 #. module: payment_epays
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_gateway__environment__localhost
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_unanswered_request__environment__localhost
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_mode__localhost
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_transaction__epays_environment__localhost
 msgid "Localhost"
@@ -339,6 +347,7 @@ msgid "Mastercard"
 msgstr "ماستركارد"
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__merchant_domain
 #: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_merchant_domain
 msgid "Merchant Domain"
 msgstr "نطاق التاجر"
@@ -359,6 +368,11 @@ msgstr "لم يتم العثور على معاملة تطابق معرّف ال�
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "Order Amount"
 msgstr "مبلغ الطلب"
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__udf2
+msgid "Order References"
+msgstr "مراجع الطلبات"
 
 #. module: payment_epays
 #. odoo-python
@@ -413,6 +427,7 @@ msgstr "لا يمكن حاليًا قبول المدفوعات بعملة %(curr
 
 #. module: payment_epays
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_gateway__environment__production
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_unanswered_request__environment__production
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_mode__production
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_transaction__epays_environment__production
 msgid "Production"
@@ -420,6 +435,7 @@ msgstr "الإنتاج"
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__provider_id
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__provider_id
 msgid "Provider"
 msgstr "المزود"
 
@@ -486,6 +502,7 @@ msgstr "Samsung Pay"
 
 #. module: payment_epays
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_gateway__environment__sandbox
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_epays_unanswered_request__environment__sandbox
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_mode__sandbox
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_transaction__epays_environment__sandbox
 msgid "Sandbox"
@@ -738,6 +755,11 @@ msgid "Transaction ID"
 msgstr "معرّف المعاملة"
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__reference
+msgid "Transaction Reference"
+msgstr "مرجع المعاملة"
+
+#. module: payment_epays
 #: model:payment.method,name:payment_epays.payment_method_epays_brand_visa
 #: model:payment.method,name:payment_epays.payment_method_epays_card_visa
 msgid "VISA"
@@ -878,6 +900,11 @@ msgid "ePays Transaction ID"
 msgstr "معرّف المعاملة في ePays"
 
 #. module: payment_epays
+#: model:ir.model,name:payment_epays.model_payment_epays_unanswered_request
+msgid "ePays Unanswered Payment Request"
+msgstr "طلب دفع ePays لم يُرَد عليه"
+
+#. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid "ePays answered with HTTP %(status)s %(code)s %(message)s"
@@ -906,6 +933,14 @@ msgstr "بوابات ePays (%s)"
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "ePays payment details for transaction %s"
 msgstr "تفاصيل دفع ePays للمعاملة %s"
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"ePays returned gateways in a format this version of the addon cannot read, "
+"so nothing was changed. Update the ePays addon."
+msgstr "أعاد ePays البوابات بصيغة لا يستطيع هذا الإصدار من تطبيق ePays قراءتها، لذلك لم يتم تغيير أي شيء. حدِّث تطبيق ePays."
 
 #. module: payment_epays
 #. odoo-python

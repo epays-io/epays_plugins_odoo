@@ -18,6 +18,7 @@ from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment_epays import const
 from odoo.addons.payment_epays import utils as epays_utils
 from odoo.addons.payment_epays.controllers.main import EpaysController
+from odoo.addons.payment_epays.utils import EpaysApiError
 
 _logger = logging.getLogger(__name__)
 
@@ -200,14 +201,22 @@ class PaymentTransaction(models.Model):
         payload = self._epays_prepare_payment_request_payload(
             environment, domain, expires_at, gateway_id=gateway_id
         )
-        payment_data = provider._epays_make_request(  # Logs the payload.
-            'POST',
-            const.PAYMENTS_PATH,
-            environment=environment,
-            domain=domain,
-            payload=payload,
-            idempotency_key=self._epays_get_idempotency_key(),
-        )
+        try:
+            payment_data = provider._epays_make_request(  # Logs the payload.
+                'POST',
+                const.PAYMENTS_PATH,
+                environment=environment,
+                domain=domain,
+                payload=payload,
+                idempotency_key=self._epays_get_idempotency_key(),
+                timeout=const.PAYMENT_REQUEST_TIMEOUT,
+            )
+        except EpaysApiError as error:
+            if error.timed_out:  # ePays may still create the payment: void it later.
+                self.env['payment.epays.unanswered.request']._epays_record(
+                    self, environment, domain, payload['customFields']['udf2']
+                )
+            raise
 
         payment_id = payment_data.get('paymentId')
         redirect_url = payment_data.get('redirect')
@@ -515,6 +524,9 @@ class PaymentTransaction(models.Model):
             'customFields': self._epays_get_custom_fields(),
         }
         if gateway_id:
+            # `subscriptionId` since ePays's v2 rename of 2026-10-18, `gatewayId` for a server not
+            # updated yet. Each server ignores the name it does not know.
+            payload['subscriptionId'] = gateway_id
             payload['gatewayId'] = gateway_id
         if provider.epays_send_customer_details:
             customer = self._epays_get_customer_values()
@@ -765,7 +777,9 @@ class PaymentTransaction(models.Model):
         :rtype: recordset of `payment.transaction`
         """
         self.ensure_one()
-        self._epays_update_payment_method(payment_data.get('gatewayId'))
+        self._epays_update_payment_method(
+            epays_utils.get_first(payment_data, 'subscriptionId', 'gatewayId')
+        )
 
         target_state, status = epays_utils.get_payment_state(payment_data)
         updated_txs = self.env['payment.transaction']
@@ -832,7 +846,8 @@ class PaymentTransaction(models.Model):
         """ Set the payment method from the ePays gateway that took the payment, when it is a synced
         gateway linked to a payment method.
 
-        :param str gateway_id: The `gatewayId` of the payment details (the merchantGateway id).
+        :param str gateway_id: The `subscriptionId` (formerly `gatewayId`) of the payment details:
+                               the merchantGateway id.
         :return: None
         """
         if epays_utils.is_empty(gateway_id):
@@ -953,7 +968,7 @@ class PaymentTransaction(models.Model):
             'epays_gateway_reference': payment_data.get('gatewayReference'),
             'epays_response_code': payment_data.get('responseCode'),
             'epays_response_desc': self._epays_get_response_description(payment_data),
-            'epays_gateway_id': payment_data.get('gatewayId'),
+            'epays_gateway_id': epays_utils.get_first(payment_data, 'subscriptionId', 'gatewayId'),
             'epays_gateway_response': json.dumps(
                 gateway_response, ensure_ascii=False, indent=2
             ) if isinstance(gateway_response, dict) else None,
@@ -971,12 +986,13 @@ class PaymentTransaction(models.Model):
         :return: None
         """
         status = payment_data.get('status')
+        status = None if epays_utils.is_empty(status) else epays_utils.humanize_status(status)
         result = payment_data.get('result')
-        if not epays_utils.is_empty(status) and not epays_utils.is_empty(result) \
-                and str(status).strip().lower() != str(result).strip().lower():
+        if status and not epays_utils.is_empty(result) \
+                and status.lower() != str(result).strip().lower():
             result_text = f'{status} ({result})'
         else:
-            result_text = status if not epays_utils.is_empty(status) else result
+            result_text = status or result
         amount = payment_data.get('amount')
         rows = [
             (_("Result"), result_text),
@@ -989,7 +1005,7 @@ class PaymentTransaction(models.Model):
             (_("Response Code"), payment_data.get('responseCode')),
             (_("Response Description"), self._epays_get_response_description(payment_data)),
             (_("Created At"), payment_data.get('createdAt')),
-            (_("Paid At"), payment_data.get('paidAt')),
+            (_("Paid At"), epays_utils.get_first(payment_data, 'completedAt', 'paidAt')),
         ]
         items = Markup('').join(
             Markup('<li>%s: %s</li>') % (label, epays_utils.format_value(value))
@@ -1065,6 +1081,8 @@ class PaymentTransaction(models.Model):
                     reference,
                 )
                 self.env.cr.rollback()
+
+        self.env['payment.epays.unanswered.request']._cron_void_orphan_payments()
 
         # Odoo's own post-processing cron is inactive when no provider is enabled, e.g. when ePays
         # was disabled while payments were in progress.

@@ -1,7 +1,7 @@
 # Part of ePays Payment Provider. See LICENSE file for full copyright and licensing details.
 
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import requests
@@ -101,6 +101,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         # 10:00 UTC + 60 minutes, expressed in Bahrain time (UTC+3).
         self.assertEqual(payload['expiryDate'], '2026-01-01T14:00:00')
         self.assertNotIn('gatewayId', payload, "\"ePays\": the customer chooses on ePays.")
+        self.assertNotIn('subscriptionId', payload)
         self.assertNotIn('trackId', payload)
         self.assertNotIn('order', payload)
         self.assertEqual(payload['customer']['fullName'], self.partner.name)
@@ -112,7 +113,19 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             'redirect', reference=self._new_reference(), payment_method_id=payment_method.id
         )
         calls, _values = self._initiate(tx)
-        return calls[0]['payload'].get('gatewayId')
+        payload = calls[0]['payload']
+        self.assertEqual(
+            payload.get('subscriptionId'), payload.get('gatewayId'),
+            "The current name and, for a server not updated yet, the former one.",
+        )
+        return payload.get('subscriptionId')
+
+    @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
+    def test_creating_a_payment_waits_longer_than_reading_one(self):
+        tx = self._create_transaction('redirect', reference=self._new_reference())
+        calls, _values = self._initiate(tx)
+        self.assertEqual(calls[0]['timeout'], const.PAYMENT_REQUEST_TIMEOUT)
+        self.assertGreater(const.PAYMENT_REQUEST_TIMEOUT, const.REQUEST_TIMEOUT)
 
     @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
     def test_a_retry_after_a_timeout_sends_a_new_idempotency_key(self):
@@ -171,7 +184,9 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         calls, _values = self._initiate(tx, response={
             'paymentId': self.payment_id, 'redirect': 'https://api.epays.io/pay/PAY-0001',
         })
-        self.assertEqual(calls[0]['payload']['gatewayId'], self.production_apple_pay_gateway_ref)
+        self.assertEqual(
+            calls[0]['payload']['subscriptionId'], self.production_apple_pay_gateway_ref
+        )
 
     @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
     def test_payment_request_without_customer_details(self):
@@ -438,6 +453,45 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(tx.state, 'done')
 
     @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
+    def test_the_details_are_read_under_their_v2_names_of_2026_10_18(self):
+        """ ePays renamed `gatewayId` to `subscriptionId` and `paidAt` to `completedAt`, and sends
+        statuses in snake case. The current name wins when a server sends both. """
+        tx = self._create_epays_transaction()
+        data = self._payment_data(
+            tx, subscriptionId=self.apple_pay_gateway_ref, gatewayId=self.card_gateway_ref,
+            status='completed',
+        )
+        with self._patch_payment_details(data):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(tx.state, 'done')
+        self.assertEqual(tx.payment_method_id, self.apple_pay_method)
+        self.assertEqual(tx.epays_gateway_id, self.apple_pay_gateway_ref)
+
+        tx_new_server = self._create_epays_transaction()
+        data = self._payment_data(
+            tx_new_server, subscriptionId=self.card_gateway_ref, completedAt='2026-10-18T11:00:00',
+            status='completed',
+        )
+        del data['gatewayId'], data['paidAt']
+        with self._patch_payment_details(data):
+            tx_new_server._handle_notification_data(
+                'epays', {'paymentId': tx_new_server.provider_reference}
+            )
+        self.assertEqual(tx_new_server.payment_method_id, self.card_method)
+
+    def test_the_note_reads_the_v2_names_of_2026_10_18(self):
+        self._skip_without_sale()
+        order = self._create_sale_order()
+        tx = self._create_epays_transaction(**self._order_values(order))
+        data = self._payment_data(tx, status='completed', completedAt='2026-10-18T11:00:00')
+        del data['paidAt']
+        with self._patch_payment_details(data), mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        note = order.message_ids.filtered(lambda m: 'ePays payment details' in (m.body or ''))
+        self.assertIn('Result: Completed', note.body, "A snake-case status reads as before.")
+        self.assertNotIn('(Completed)', note.body, "The same word is not repeated as the result.")
+        self.assertIn('Paid At: 2026-10-18T11:00:00', note.body)
+
     def test_payment_method_follows_the_epays_gateway(self):
         tx = self._create_epays_transaction()  # Paid with "ePays": chosen on the ePays page.
         data = self._payment_data(tx, gatewayId=int(self.apple_pay_gateway_ref))
@@ -1865,6 +1919,40 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         with mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
             self.assertIsNone(self._initiated_gateway_id(self.tabby_method))
 
+    def test_sync_gateways_reads_the_v2_names_of_2026_10_18(self):
+        """ `merchantGateway` became `subscriptionId` and the type `gatewayId` became
+        `gatewayTypeId`; statuses are in snake case. """
+        _calls, action = self._sync([
+            {'subscriptionId': self.card_gateway_ref, 'merchantApiId': 'A', 'gatewayTypeId': 2,
+             'gatewayName': "Credit Card", 'gatewayClass': 'MPGS', 'status': 'active'},
+            {'subscriptionId': '11112222', 'gatewayTypeId': 6, 'gatewayName': "BenefitPay",
+             'status': 'inactive'},
+            {'subscriptionId': '77778888', 'gatewayTypeId': 7, 'gatewayName': "Zoho"},
+        ])
+        rows = {row.gateway_ref: row for row in self._gateways('sandbox')}
+        self.assertEqual(set(rows), {self.card_gateway_ref, '11112222'})
+        self.assertEqual(rows[self.card_gateway_ref].gateway_type_id, 2)
+        self.assertTrue(rows[self.card_gateway_ref].is_active)
+        self.assertEqual(rows['11112222'].payment_method_id, self.benefit_pay_method)
+        self.assertFalse(rows['11112222'].is_active)
+        self.assertEqual(action['params']['type'], 'success')
+
+    @mute_logger('odoo.addons.payment_epays.models.payment_provider')
+    def test_sync_gateways_keeps_the_rows_when_it_cannot_read_the_list(self):
+        """ A list in names this version does not know would otherwise drop every row, and with
+        them the payment methods offered at checkout. """
+        rows = self._gateways('sandbox')
+        _calls, action = self._sync([
+            {'gatewaySubscription': '12345678', 'gatewayKind': 2, 'gatewayName': "Credit Card"},
+        ])
+        self.assertEqual(self._gateways('sandbox'), rows)
+        self.assertEqual(action['params']['type'], 'warning')
+        self.assertIn('cannot read', action['params']['message'])
+
+        # An empty list is a merchant without gateways: the rows go.
+        self._sync([])
+        self.assertFalse(self._gateways('sandbox'))
+
     def test_sync_gateways_uses_the_environment_of_the_provider_mode(self):
         self.provider.epays_mode = 'production'
         sandbox_rows = self._gateways('sandbox')
@@ -1890,6 +1978,136 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(action['params']['type'], 'warning')
         self.assertIn('203.0.113.7', action['params']['message'])
         self.assertEqual(self._gateways('sandbox'), rows)
+
+    #=== A payment request ePays answered too late ===#
+
+    def _unanswered(self, udf2, age=timedelta(minutes=10)):
+        """ An unanswered request recorded `age` ago. """
+        request = self.env['payment.epays.unanswered.request'].create({
+            'provider_id': self.provider.id, 'environment': 'sandbox',
+            'merchant_domain': 'shop.example.com', 'udf2': udf2, 'reference': udf2,
+        })
+        self.env.cr.execute(
+            "UPDATE payment_epays_unanswered_request SET create_date = %s WHERE id = %s",
+            [fields.Datetime.now() - age, request.id],
+        )
+        request.invalidate_recordset(['create_date'])
+        return request
+
+    def _run_orphan_cron(self, listing=None, list_error=None):
+        calls = []
+
+        def handler(provider, method, path, **kwargs):
+            calls.append((method, path))
+            if method == 'GET' and list_error:
+                raise list_error
+            return listing if method == 'GET' else {'status': 'voided'}
+
+        with self._patch_make_request(handler), \
+                patch.object(self.env.cr, 'commit'), patch.object(self.env.cr, 'rollback'), \
+                mute_logger('odoo.addons.payment_epays.models.payment_epays_unanswered_request'):
+            self.env['payment.epays.unanswered.request']._cron_void_orphan_payments()
+        return calls
+
+    @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER,
+                 'odoo.addons.payment_epays.models.payment_epays_unanswered_request')
+    def test_a_payment_request_answered_too_late_is_recorded_for_its_orders(self):
+        self._skip_without_sale()
+        order = self._create_sale_order()
+        Request = self.env['payment.epays.unanswered.request']
+
+        def pay_and_fail(error):
+            """ Not `assertRaises`: Odoo's rolls back the database changes of its block, and the
+            request is recorded precisely to survive the rollback of a failed payment. """
+            def handler(provider, method, path, **kwargs):
+                raise error
+
+            tx = self._create_transaction('redirect', reference=False, **self._order_values(order))
+            with self._patch_make_request(handler):
+                try:
+                    tx._get_processing_values()
+                except ValidationError:
+                    return tx
+            return self.fail("The payment request did not fail.")
+
+        pay_and_fail(EpaysApiError("ePays: unreachable", connection_error="refused"))
+        self.assertFalse(
+            Request.search([('udf2', '=', order.name)]), "A request never sent created nothing."
+        )
+
+        tx = pay_and_fail(EpaysApiError(
+            "ePays: unreachable", connection_error="Read timed out.", timed_out=True
+        ))
+        request = Request.search([('udf2', '=', order.name)])
+        self.assertEqual(len(request), 1)
+        self.assertEqual(request.environment, 'sandbox')
+        self.assertEqual(request.merchant_domain, 'shop.example.com')
+        self.assertEqual(request.reference, tx.reference)
+
+    def test_the_cron_voids_the_payments_left_by_an_unanswered_request(self):
+        """ Only the pending payments of the order, old enough, that no transaction holds. """
+        self._skip_without_sale()
+        order = self._create_sale_order()
+        held = self._earlier_attempt(order, state='pending')
+        request = self._unanswered(order.name)
+        now = datetime.now(timezone.utc)
+        old, young = now - timedelta(minutes=5), now - timedelta(seconds=30)
+
+        def item(payment_id, created_at, status='pending', udf2=order.name):
+            return {'paymentId': payment_id, 'udf2': udf2, 'status': status,
+                    'createdAt': created_at.isoformat(timespec='seconds')}
+
+        # An older ePays server: PascalCase status, a timestamp without offset (Bahrain time).
+        old_server_item = {
+            'paymentId': 'ORPHAN-OLD-SERVER', 'udf2': order.name, 'status': 'Pending',
+            'createdAt': (old + const.EPAYS_TIMEZONE_OFFSET).replace(tzinfo=None).isoformat(
+                timespec='seconds'
+            ),
+        }
+        calls = self._run_orphan_cron({'payments': [
+            item('ORPHAN', old),
+            old_server_item,
+            item(held.provider_reference, old),  # A transaction holds it.
+            item('YOUNG', young),  # A click may still be waiting for it.
+            item('OTHER-ORDER', old, udf2='S99999'),
+            item('PAID', old, status='completed'),
+            item('NO-DATE', old) | {'createdAt': ''},
+        ]})
+
+        self.assertEqual(calls[0][0], 'GET')
+        self.assertIn('status=pending', calls[0][1])
+        self.assertIn(f'udf2={order.name}', calls[0][1])
+        self.assertEqual(
+            [path for method, path in calls if method == 'DELETE'],
+            ['/api/v2/Payments/ORPHAN', '/api/v2/Payments/ORPHAN-OLD-SERVER'],
+        )
+        self.assertFalse(request.exists(), "A handled request is forgotten.")
+
+    def test_the_cron_voids_nothing_on_a_server_that_ignores_the_list_filters(self):
+        """ The sandbox of 2026-10-20 ignores `status` and `udf2` and lists other payments, without
+        those fields: a payment is voided only when its own fields say it is a pending one of the
+        order, so such a list voids nothing. """
+        request = self._unanswered('S00111')
+        old = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(timespec='seconds')
+        calls = self._run_orphan_cron({'payments': [
+            {'paymentId': '832582023', 'createdAt': old},
+            {'paymentId': '853484944', 'createdAt': old},
+        ]})
+        self.assertEqual([method for method, _path in calls], ['GET'])
+        self.assertFalse(request.exists())
+
+    def test_the_cron_waits_retries_and_gives_up_on_unanswered_requests(self):
+        young = self._unanswered('S-YOUNG', age=timedelta(seconds=30))
+        unreachable = self._unanswered('S-UNREACHABLE')
+        too_old = self._unanswered('S-TOO-OLD', age=const.UNANSWERED_REQUEST_MAX_AGE + timedelta(1))
+
+        calls = self._run_orphan_cron(list_error=EpaysApiError("ePays: unreachable"))
+
+        self.assertEqual(calls, [('GET', calls[0][1])], "Only the request old enough is looked up.")
+        self.assertIn('udf2=S-UNREACHABLE', calls[0][1])
+        self.assertTrue(young.exists(), "A click may still be waiting for its answer.")
+        self.assertTrue(unreachable.exists(), "ePays could not be reached: retried next run.")
+        self.assertFalse(too_old.exists(), "Given up after the maximum age.")
 
     #=== A payment reused by ePays ===#
 

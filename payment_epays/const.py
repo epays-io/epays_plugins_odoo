@@ -45,6 +45,9 @@ NOTIFICATION_ENVIRONMENT_KEY = 'epays_environment'
 
 # The timeout of every request made to the ePays API, in seconds.
 REQUEST_TIMEOUT = 10
+# Creating a payment can take longer: ePays opens the gateway sessions. A slow answer no longer
+# blocks the next attempt, which has its own idempotency key (`_epays_get_idempotency_key`).
+PAYMENT_REQUEST_TIMEOUT = 30
 
 # The credentials of a provider, and among them the secrets. A secret never leaves the server:
 # reading it returns SECRET_MASK once it is set, and writing SECRET_MASK back keeps the stored
@@ -145,6 +148,10 @@ CRON_MIN_AGE = timedelta(minutes=5)
 CRON_MAX_AGE = timedelta(days=3)
 # A payment still pending this long after its link expired is voided on ePays.
 CRON_VOID_GRACE_PERIOD = timedelta(minutes=30)
+# A payment request ePays answered too late may still have created the payment: the scheduled check
+# voids it once no click can still be waiting for it, and gives up after the maximum age.
+UNANSWERED_REQUEST_MIN_AGE = timedelta(minutes=2)
+UNANSWERED_REQUEST_MAX_AGE = timedelta(days=1)
 # Finished transactions are post-processed by the cron for this long after their last state change.
 CRON_POST_PROCESS_LIMIT = timedelta(days=4)
 
