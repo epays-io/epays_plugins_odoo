@@ -941,6 +941,62 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertNotIn(tx_processed, post_processed_txs)
         self.assertEqual(set(post_processed_txs.mapped('provider_code')), {'epays'})
 
+    def _skip_if_post_processing_is_stubbed(self):
+        if self.account_payment_installed and self.enable_post_process_patcher:
+            self.skipTest(
+                "Odoo's payment tests stub the post-processing of account_payment, and with it the "
+                "ePays one; EpaysAccountingTest runs it for real"
+            )
+
+    def test_post_processing_a_done_payment_acknowledges_it_on_epays(self):
+        self._skip_if_post_processing_is_stubbed()
+        tx = self._create_epays_transaction(state='done', epays_merchant_domain='a.example.com')
+        calls = []
+
+        def handler(provider, method, path, **kwargs):
+            calls.append((method, path, kwargs))
+            return {'paymentId': tx.provider_reference, 'firstAcknowledgement': True}
+
+        with self._patch_make_request(handler):
+            tx._post_process()
+        self.assertEqual(calls, [(
+            'POST', f'/api/v2/Payments/{tx.provider_reference}/acknowledgement',
+            {'environment': 'sandbox', 'domain': 'a.example.com',
+             'timeout': const.ACKNOWLEDGEMENT_TIMEOUT},
+        )])
+        self.assertTrue(tx.is_post_processed)
+
+    def test_only_done_epays_payments_are_acknowledged(self):
+        self._skip_if_post_processing_is_stubbed()
+        txs = self.env['payment.transaction']
+        for state in ('draft', 'pending', 'error', 'cancel'):
+            txs |= self._create_epays_transaction(state=state)
+        txs |= self._create_epays_transaction(state='done', provider_reference=False)
+        txs |= self._create_transaction(
+            'redirect', reference='OTHER-DONE', provider_id=self.dummy_provider.id, state='done',
+        )
+        calls = []
+        with self._patch_make_request(lambda *args, **kwargs: calls.append(args)):
+            txs._post_process()
+        self.assertEqual(calls, [])
+
+    def test_a_failed_acknowledgement_is_only_logged(self):
+        for error in (
+            EpaysApiError("unreachable", http_status=404),  # A server before the endpoint.
+            EpaysApiError("unreachable", http_status=404, error_code='PAYMENT_NOT_FOUND'),
+            EpaysApiError("unreachable", http_status=500, error_code='SERVER_ERROR'),
+            EpaysApiError("unreachable", connection_error="read timed out", timed_out=True),
+        ):
+            with self.subTest(http_status=error.http_status, error_code=error.error_code):
+                tx = self._create_epays_transaction(state='done')
+
+                def handler(provider, method, path, error=error, **kwargs):
+                    raise error
+
+                with self._patch_make_request(handler), mute_logger(TX_LOGGER):
+                    tx._epays_acknowledge()  # Does not raise.
+                self.assertEqual(tx.state, 'done')
+
     def test_cron_continues_after_a_failing_transaction(self):
         tx_failing = self._create_epays_transaction(state='pending')
         tx_ok = self._create_epays_transaction(state='pending')
@@ -2158,8 +2214,9 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(response.status_code, 303)
         self.assertEqual(tx_second.state, 'done')
         self.assertEqual(tx_first.state, 'cancel')
-        with mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
-            tx_second._post_process()
+        with self._patch_make_request(lambda *args, **kwargs: {}), \
+                mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
+            tx_second._post_process()  # Acknowledges the payment.
         self.assertEqual(order.state, 'sale')
 
     def test_a_started_transaction_sharing_the_payment_is_left_alone(self):

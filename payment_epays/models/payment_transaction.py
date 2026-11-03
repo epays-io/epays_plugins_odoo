@@ -143,11 +143,13 @@ class PaymentTransaction(models.Model):
         invoices = self.invoice_ids if 'invoice_ids' in self._fields else []
         return orders, invoices
 
-    def _epays_request_payment(self, method):
-        """ Call the ePays payment of the transaction (`GET` or `DELETE /api/v2/Payments/{id}`),
-        with the environment and merchant domain it was created with.
+    def _epays_request_payment(self, method, endpoint='', timeout=None):
+        """ Call the ePays payment of the transaction (e.g. `GET /api/v2/Payments/{id}`), with the
+        environment and merchant domain it was created with.
 
         :param str method: The HTTP method.
+        :param str endpoint: The path after the payment, e.g. `/acknowledgement`, if any.
+        :param int timeout: The seconds to wait for the answer; `const.REQUEST_TIMEOUT` by default.
         :return: The `data` of the response.
         :rtype: dict
         :raise EpaysApiError: If the request fails.
@@ -156,9 +158,10 @@ class PaymentTransaction(models.Model):
         provider = self.provider_id
         return provider._epays_make_request(
             method,
-            f'{const.PAYMENTS_PATH}/{quote(self.provider_reference or "", safe="")}',
+            f'{const.PAYMENTS_PATH}/{quote(self.provider_reference or "", safe="")}{endpoint}',
             environment=self._epays_get_environment(),
             domain=self.epays_merchant_domain or provider._epays_get_merchant_domain(),
+            timeout=timeout,
         )
 
     #=== BUSINESS METHODS - PAYMENT FLOW ===#
@@ -1148,3 +1151,51 @@ class PaymentTransaction(models.Model):
                 self.reference,
             )
             return None
+
+    #=== BUSINESS METHODS - POST-PROCESSING ===#
+
+    def _post_process(self):
+        """ Override of `payment` to acknowledge the completed ePays payments on ePays.
+
+        This runs after the request that set the transactions done, and after the orders were
+        confirmed and the payments created: the acknowledgement tells ePays that Odoo recorded the
+        payment.
+
+        :return: None
+        """
+        super()._post_process()
+        for tx in self.filtered(
+            lambda t: t.provider_code == 'epays' and t.state == 'done' and t.provider_reference
+        ):
+            tx._epays_acknowledge()
+
+    def _epays_acknowledge(self):
+        """ Mark the ePays payment of the transaction as processed by the merchant.
+
+        ePays then stops notifying it and leaves it out of its unacknowledged payments. Only
+        completed payments are acknowledged: a declined one can still complete on the same link.
+        Repeats are harmless, and a failure is only logged: Odoo's transaction state, not this
+        flag, keeps a payment from being processed twice.
+
+        Note: self.ensure_one()
+
+        :return: None
+        """
+        self.ensure_one()
+        try:
+            self._epays_request_payment(
+                'POST', '/acknowledgement', timeout=const.ACKNOWLEDGEMENT_TIMEOUT
+            )
+        except ValidationError as error:
+            # A server before the endpoint answers a bare 404; an unknown payment is a 404 with
+            # an ePays error code.
+            if getattr(error, 'http_status', None) == 404 and not getattr(error, 'error_code', ''):
+                _logger.info(
+                    "ePays did not acknowledge the payment of transaction %s: this ePays server "
+                    "does not support acknowledgements yet", self.reference,
+                )
+            else:
+                _logger.warning(
+                    "ePays did not acknowledge the payment of transaction %s; Odoo recorded it "
+                    "anyway", self.reference,
+                )

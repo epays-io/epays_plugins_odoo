@@ -48,6 +48,9 @@ REQUEST_TIMEOUT = 10
 # Creating a payment can take longer: ePays opens the gateway sessions. A slow answer no longer
 # blocks the next attempt, which has its own idempotency key (`_epays_get_idempotency_key`).
 PAYMENT_REQUEST_TIMEOUT = 30
+# Acknowledging a completed payment is shorter: the customer's status page waits on it, and a
+# failure only leaves the payment unacknowledged on ePays.
+ACKNOWLEDGEMENT_TIMEOUT = 5
 
 # The credentials of a provider, and among them the secrets. A secret never leaves the server:
 # reading it returns SECRET_MASK once it is set, and writing SECRET_MASK back keeps the stored

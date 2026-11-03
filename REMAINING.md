@@ -1,12 +1,15 @@
 # ePays for Odoo — what is left
 
-Status on 2026-10-20. The addon (`payment_epays` 18.0.1.0.5) is feature-complete and tested:
-136 tests with sales and accounting, 131 with the module alone, lint and store checks clean,
-upgraded from 18.0.1.0.3 and 18.0.1.0.4 (command line and Apps > Upgrade). End-to-end against the
-local ePays core API (new v2 names) and the sandbox (old names): shop approval, decline and cancel
-in English and Arabic, the individual Card method, Sync from ePays, a USD invoice paid from its
-portal link (charged in BHD), a payment request answered too late and its orphan voided. What
-remains is shipping it, the ePays-side release steps below, and real payment methods.
+Status on 2026-11-03. The addon (`payment_epays` 18.0.1.0.6, not yet on the store) is
+feature-complete and tested: 140 tests with sales and accounting, 134 with the module alone, lint
+clean, upgraded from 18.0.1.0.5. 18.0.1.0.6 acknowledges completed payments on ePays
+(`POST /api/v2/Payments/{id}/acknowledgement`); end-to-end against the local ePays core API an
+approved payment reads `acknowledged` on ePays and a declined one does not. 18.0.1.0.5 was tested
+end-to-end against the local API (new v2 names) and the sandbox (old names): shop approval,
+decline and cancel in English and Arabic, the individual Card method, Sync from ePays, a USD
+invoice paid from its portal link (charged in BHD), a payment request answered too late and its
+orphan voided. What remains is shipping it, the ePays-side release steps below, and real payment
+methods.
 
 ## 1. Tests still to do
 
@@ -58,6 +61,11 @@ remains is shipping it, the ePays-side release steps below, and real payment met
       Odoo sent, so the messages follow the website's language, not the switch).
 - [ ] **Sandbox payment list ignores `status` and `udf2`** and omits them from its items, so the
       orphan cleanup voids nothing there until it gets the current API.
+- [ ] **Sandbox has no acknowledgement endpoint** (2026-11-03: `POST /api/v2/Payments/{id}/
+      acknowledgement` answers a bare 404). 18.0.1.0.6 then only logs an info line and completes
+      the payment as before; payments stay unacknowledged there until it gets the current API.
+- [ ] **A sandbox payment with 18.0.1.0.6**: the sandbox keys were cleared from the test shop
+      after the 18.0.1.0.5 tests; enter them again to run one.
 
 ## 4. Onboard each merchant (ePays side)
 

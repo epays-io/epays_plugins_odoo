@@ -14,6 +14,7 @@ from odoo.tools import mute_logger
 from odoo.addons.payment.tests.http_common import PaymentHttpCommon
 from odoo.addons.payment_epays.controllers.main import EpaysController
 from odoo.addons.payment_epays.tests.common import REQUESTS_PATH, EpaysCommon, FakeResponse
+from odoo.addons.payment_epays.utils import EpaysApiError
 
 try:
     from odoo.addons.account_payment.tests.common import AccountPaymentCommon
@@ -95,7 +96,34 @@ if AccountPaymentCommon is not None:
             with self._patch_payment_details(self._payment_data(tx)):
                 tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
             self.assertEqual(tx.state, 'done')
-            tx._post_process()
+            calls = []
+            with self._patch_make_request(lambda provider, method, path, **kwargs: calls.append(
+                (method, path)
+            ) or {}):
+                tx._post_process()
+            self._assert_payment_posted(tx)
+            self.assertEqual(order.state, 'sale')
+            self.assertEqual(
+                calls, [('POST', f'/api/v2/Payments/{tx.provider_reference}/acknowledgement')],
+                "Odoo acknowledges the payment once it recorded it.",
+            )
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_failed_acknowledgement_does_not_stop_the_order(self):
+            self.ensure_installed('sale')
+            order = self._create_sale_order(confirm=False, currency_id=self.currency.id)
+            tx = self._create_epays_transaction(
+                amount=order.amount_total, sale_order_ids=[Command.set(order.ids)],
+            )
+            with self._patch_payment_details(self._payment_data(tx)):
+                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+
+            def handler(provider, method, path, **kwargs):
+                raise EpaysApiError("unreachable", http_status=404)  # An older ePays server.
+
+            with self._patch_make_request(handler):
+                tx._post_process()
+            self.assertTrue(tx.is_post_processed)
             self._assert_payment_posted(tx)
             self.assertEqual(order.state, 'sale')
 
@@ -124,7 +152,8 @@ if AccountPaymentCommon is not None:
             self.assertEqual(len(notes), 1, "One details note, however many notifications.")
             self.assertIn('Card Brand: MASTERCARD', notes.body)
 
-            tx._post_process()
+            with self._patch_make_request(lambda *args, **kwargs: {}):
+                tx._post_process()
             self._assert_payment_posted(tx)
             self.assertIn(invoice.payment_state, ('paid', 'in_payment'))
 
@@ -152,7 +181,8 @@ if AccountPaymentCommon is not None:
                 tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
             self.assertEqual(tx.state, 'done')
 
-            tx._post_process()
+            with self._patch_make_request(lambda *args, **kwargs: {}):
+                tx._post_process()
             self._assert_payment_posted(tx)
             self.assertEqual(tx.payment_id.currency_id, self.currency)
             self.assertIn(invoice.payment_state, ('paid', 'in_payment'))
@@ -172,8 +202,10 @@ if AccountPaymentCommon is not None:
             self._assert_sandbox_calls(calls)
 
             # Odoo's post-processing cron is off without an active provider; the ePays one is not.
-            self._run_cron()
+            with patch(REQUESTS_PATH, side_effect=self._fake_api(tx, calls)):
+                self._run_cron()
             self._assert_payment_posted(tx)
+            self._assert_sandbox_calls(calls)  # The acknowledgement too.
 
         def test_disabled_mid_payment_completes_through_the_cron(self):
             tx = self._create_epays_transaction(state='pending')
@@ -187,6 +219,12 @@ if AccountPaymentCommon is not None:
             self.assertEqual(tx.state, 'done')
             self._assert_sandbox_calls(calls)
             self._assert_payment_posted(tx)
+            self.assertEqual(
+                [(call['method'], urlsplit(call['url']).path) for call in calls],
+                [('GET', f'/api/v2/Payments/{tx.provider_reference}'),
+                 ('POST', f'/api/v2/Payments/{tx.provider_reference}/acknowledgement')],
+                "Post-processed by the ePays cron, the payment is acknowledged on the sandbox.",
+            )
 
         def _assert_sandbox_calls(self, calls):
             self.assertTrue(calls)
