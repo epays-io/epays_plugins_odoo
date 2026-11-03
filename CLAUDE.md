@@ -67,10 +67,13 @@ early for other providers.
      transaction holds (`GET /api/v2/Payments?status=pending&udf2=…`). Each attempt has its own
      idempotency key (`_epays_get_idempotency_key`): the rolled-back reference comes back. Tests
      for it cannot use Odoo's `assertRaises`, which rolls the separate cursor's write back too.
-  6. `_post_process` acknowledges `done` payments (`POST /api/v2/Payments/{id}/acknowledgement`),
-     after the done state is committed and the order recorded. It is informational (ePays stops
-     notifying and lists unacknowledged payments): a failure, e.g. the bare 404 of a server before
-     the endpoint, is only logged. Odoo's state and `is_post_processed` prevent double processing.
+  6. `_post_process` acknowledges `done`, `error` and `cancel` payments
+     (`POST /api/v2/Payments/{id}/acknowledgement`), after the state is committed and the order
+     recorded, except money ePays took that Odoo refused (`error` with response code `00`), left
+     for the merchant in ePays's unacknowledged list. ePays clears the mark when a payment later
+     completes, so a declined payment paid on the same link is notified again. It is informational:
+     a failure, e.g. the bare 404 of a server before the endpoint, is only logged. Odoo's state and
+     `is_post_processed` prevent double processing.
      With `account_payment` installed, Odoo's `PaymentCommon` stubs its `_post_process`, cutting the
      ePays override out too: `EpaysAccountingTest` tests it for real.
 - **Currency**: ePays only charges `BHD` (`const.CHARGE_CURRENCY`); other currencies are converted

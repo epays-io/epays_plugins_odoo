@@ -2,9 +2,9 @@
 
 Status on 2026-11-03. The addon (`payment_epays` 18.0.1.0.6, not yet on the store) is
 feature-complete and tested: 140 tests with sales and accounting, 134 with the module alone, lint
-clean, upgraded from 18.0.1.0.5. 18.0.1.0.6 acknowledges completed payments on ePays
-(`POST /api/v2/Payments/{id}/acknowledgement`); end-to-end against the local ePays core API an
-approved payment reads `acknowledged` on ePays and a declined one does not. 18.0.1.0.5 was tested
+clean, upgraded from 18.0.1.0.5. 18.0.1.0.6 acknowledges finished payments on ePays
+(`POST /api/v2/Payments/{id}/acknowledgement`): completed, declined and cancelled, but not money
+ePays took that Odoo refused. 18.0.1.0.5 was tested
 end-to-end against the local API (new v2 names) and the sandbox (old names): shop approval,
 decline and cancel in English and Arabic, the individual Card method, Sync from ePays, a USD
 invoice paid from its portal link (charged in BHD), a payment request answered too late and its

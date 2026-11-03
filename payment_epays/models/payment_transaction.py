@@ -1155,27 +1155,32 @@ class PaymentTransaction(models.Model):
     #=== BUSINESS METHODS - POST-PROCESSING ===#
 
     def _post_process(self):
-        """ Override of `payment` to acknowledge the completed ePays payments on ePays.
+        """ Override of `payment` to acknowledge the finished ePays payments on ePays.
 
-        This runs after the request that set the transactions done, and after the orders were
-        confirmed and the payments created: the acknowledgement tells ePays that Odoo recorded the
-        payment.
+        This runs after the request that set the transactions' final state, and after the orders
+        were confirmed and the payments created: the acknowledgement tells ePays that Odoo recorded
+        the result.
 
         :return: None
         """
         super()._post_process()
         for tx in self.filtered(
-            lambda t: t.provider_code == 'epays' and t.state == 'done' and t.provider_reference
+            lambda t: t.provider_code == 'epays' and t.provider_reference
+            and t.state in ('done', 'error', 'cancel')
         ):
+            # Money ePays took that Odoo refused (an amount or reference mismatch, a refund) stays
+            # unacknowledged, among the payments ePays lists for the merchant to reconcile.
+            if tx.state != 'done' and tx.epays_response_code == const.APPROVED_RESPONSE_CODE:
+                continue
             tx._epays_acknowledge()
 
     def _epays_acknowledge(self):
         """ Mark the ePays payment of the transaction as processed by the merchant.
 
-        ePays then stops notifying it and leaves it out of its unacknowledged payments. Only
-        completed payments are acknowledged: a declined one can still complete on the same link.
-        Repeats are harmless, and a failure is only logged: Odoo's transaction state, not this
-        flag, keeps a payment from being processed twice.
+        ePays then stops notifying it and leaves it out of its unacknowledged payments. A declined
+        payment completed later on the same link is notified again: ePays clears the mark when a
+        payment completes. Repeats are harmless, and a failure is only logged: Odoo's transaction
+        state, not this flag, keeps a payment from being processed twice.
 
         Note: self.ensure_one()
 

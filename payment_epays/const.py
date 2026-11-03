@@ -130,6 +130,9 @@ PAYMENT_STATUS_MAPPING = {
     'cancel': ('cancelled', 'canceled', 'expired', 'voided'),
 }
 
+# The response code of a payment the gateway approved: ePays completes a payment only with it.
+APPROVED_RESPONSE_CODE = '00'
+
 # ePays interprets `expiryDate` in Bahrain time (UTC+3, no daylight saving time).
 EPAYS_TIMEZONE_OFFSET = timedelta(hours=3)
 EPAYS_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S'

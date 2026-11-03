@@ -406,9 +406,11 @@ What the addon does:
   ePays, and completes the order only if the amount, the currency and the order and invoice numbers
   match. A refunded payment never completes an order.
 * A completed payment is recorded once, however many times ePays, the customer's browser and the
-  scheduled action report it. Once Odoo has recorded it, it acknowledges the payment on ePays, so
-  ePays stops notifying it and lists it among the payments the merchant took. An ePays server
-  without acknowledgements yet is answered with nothing more than a line in the server log.
+  scheduled action report it. Once Odoo has recorded a payment's result (completed, declined or
+  cancelled), it acknowledges the payment on ePays, so ePays stops notifying it. A payment ePays
+  took but Odoo refused (wrong amount or order, refunded) is left unacknowledged, so that it stays
+  in ePays's list of payments to check. An ePays server without acknowledgements yet only gets a
+  line in the server log.
 * Calls to ePays use https with certificate checking, on the fixed server of the chosen mode, and
   never follow a redirect, so the master key is only ever sent to ePays.
 * The API master keys never leave the server. Once saved, a key is shown as ``********`` and is

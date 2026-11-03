@@ -109,6 +109,29 @@ if AccountPaymentCommon is not None:
             )
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_declined_payment_is_acknowledged_but_not_a_refused_one(self):
+            declined = self._create_epays_transaction()
+            refused = self._create_epays_transaction()  # Paid, but not the amount of the order.
+            for tx, overrides in [
+                (declined, {'status': 'Failed', 'result': 'DECLINED', 'responseCode': '51'}),
+                (refused, {'amount': '1.000'}),
+            ]:
+                with self._patch_payment_details(self._payment_data(tx, **overrides)):
+                    tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            self.assertEqual((declined.state, refused.state), ('error', 'error'))
+
+            paths = []
+            with self._patch_make_request(lambda provider, method, path, **kwargs: paths.append(
+                path
+            ) or {}):
+                (declined | refused)._post_process()
+            self.assertEqual(
+                paths, [f'/api/v2/Payments/{declined.provider_reference}/acknowledgement'],
+                "The refused payment stays among the ones ePays lists for the merchant to check.",
+            )
+            self.assertFalse((declined | refused).payment_id, "No accounting payment for either.")
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
         def test_a_failed_acknowledgement_does_not_stop_the_order(self):
             self.ensure_installed('sale')
             order = self._create_sale_order(confirm=False, currency_id=self.currency.id)

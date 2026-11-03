@@ -966,19 +966,31 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         )])
         self.assertTrue(tx.is_post_processed)
 
-    def test_only_done_epays_payments_are_acknowledged(self):
+    def test_finished_epays_payments_are_acknowledged(self):
         self._skip_if_post_processing_is_stubbed()
-        txs = self.env['payment.transaction']
-        for state in ('draft', 'pending', 'error', 'cancel'):
-            txs |= self._create_epays_transaction(state=state)
-        txs |= self._create_epays_transaction(state='done', provider_reference=False)
-        txs |= self._create_transaction(
+        acknowledged = self.env['payment.transaction']
+        for state, response_code in [('done', '00'), ('error', '51'), ('cancel', False)]:
+            acknowledged |= self._create_epays_transaction(
+                state=state, epays_response_code=response_code
+            )
+        left_alone = self.env['payment.transaction']
+        for state in ('draft', 'pending'):
+            left_alone |= self._create_epays_transaction(state=state)
+        # Money ePays took that Odoo refused: left for the merchant to reconcile on ePays.
+        left_alone |= self._create_epays_transaction(state='error', epays_response_code='00')
+        left_alone |= self._create_epays_transaction(state='done', provider_reference=False)
+        left_alone |= self._create_transaction(
             'redirect', reference='OTHER-DONE', provider_id=self.dummy_provider.id, state='done',
         )
-        calls = []
-        with self._patch_make_request(lambda *args, **kwargs: calls.append(args)):
-            txs._post_process()
-        self.assertEqual(calls, [])
+        paths = []
+        with self._patch_make_request(lambda provider, method, path, **kwargs: paths.append(
+            (method, path)
+        ) or {}):
+            (acknowledged | left_alone)._post_process()
+        self.assertCountEqual(paths, [
+            ('POST', f'/api/v2/Payments/{tx.provider_reference}/acknowledgement')
+            for tx in acknowledged
+        ])
 
     def test_a_failed_acknowledgement_is_only_logged(self):
         for error in (
