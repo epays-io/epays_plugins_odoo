@@ -7,6 +7,8 @@ from unittest.mock import patch
 import requests
 from freezegun import freeze_time
 from lxml import etree, objectify
+from psycopg2 import pool
+from psycopg2.errors import SerializationFailure
 
 from odoo import Command, fields
 from odoo.exceptions import AccessError, ValidationError
@@ -596,6 +598,10 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                 'provider_code': provider_code, 'state': state, 'landing_route': landing_route,
             }
             with self.subTest(provider=provider_code, state=state, landing=landing_route), \
+                    patch.object(
+                        EpaysPostProcessing, '_get_monitored_transaction',
+                        return_value=self.env['payment.transaction'],
+                    ), \
                     patch.object(PaymentPostProcessing, 'poll_status', return_value=polled_values):
                 values = EpaysPostProcessing().poll_status()
                 self.assertEqual(values['landing_route'], expected_route)
@@ -842,7 +848,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             ('draft', timedelta(minutes=2), timedelta(hours=1), True, False),  # Too recent.
             ('pending', timedelta(days=4), timedelta(hours=1), True, False),  # Too old.
             ('done', timedelta(minutes=10), timedelta(hours=1), True, False),
-            ('cancel', timedelta(minutes=10), timedelta(hours=1), True, False),
+            ('cancel', timedelta(minutes=10), timedelta(hours=1), True, True),  # May be charged.
             ('draft', timedelta(minutes=10), timedelta(hours=1), False, False),  # Not initiated.
         ]:
             tx = self._create_epays_transaction(
@@ -959,10 +965,11 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
 
         with self._patch_make_request(handler):
             tx._post_process()
+            self._run_commit_hooks()
         self.assertEqual(calls, [(
             'POST', f'/api/v2/Payments/{tx.provider_reference}/acknowledgement',
             {'environment': 'sandbox', 'domain': 'a.example.com',
-             'timeout': const.ACKNOWLEDGEMENT_TIMEOUT},
+             'timeout': const.POST_PROCESSING_TIMEOUT},
         )])
         self.assertTrue(tx.is_post_processed)
 
@@ -983,14 +990,175 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             'redirect', reference='OTHER-DONE', provider_id=self.dummy_provider.id, state='done',
         )
         paths = []
-        with self._patch_make_request(lambda provider, method, path, **kwargs: paths.append(
-            (method, path)
-        ) or {}):
+
+        def handler(provider, method, path, **kwargs):
+            if method == 'GET':
+                return {'status': 'Failed'}
+            paths.append(path)
+            return {}
+
+        with self._patch_make_request(handler):
             (acknowledged | left_alone)._post_process()
+            self._run_commit_hooks()
         self.assertCountEqual(paths, [
-            ('POST', f'/api/v2/Payments/{tx.provider_reference}/acknowledgement')
-            for tx in acknowledged
+            f'/api/v2/Payments/{tx.provider_reference}/acknowledgement' for tx in acknowledged
         ])
+
+    def test_a_cancelled_payment_is_acknowledged_only_if_epays_kept_no_money(self):
+        """ Odoo's state can lag behind: an acknowledgement would remove a charged payment from the
+        ones ePays lists for the merchant. """
+        self._skip_if_post_processing_is_stubbed()
+        for name, answer, is_acknowledged in [
+            ('voided', {'status': 'Voided'}, True),
+            ('declined', {'status': 'Failed'}, True),
+            ('charged', {'status': 'Completed'}, False),
+            ('refunded', {'status': 'Refunded'}, False),
+            ('open, taken over by a newer attempt', {'status': 'Pending'}, False),
+            ('an unknown status', {'status': 'CAPTURING'}, False),
+            ('unreadable', EpaysApiError("unreachable", http_status=500), False),
+        ]:
+            with self.subTest(name):
+                tx = self._create_epays_transaction(state='cancel')
+                with self._patch_make_request(
+                    lambda *args, **kwargs: None
+                ) as make_request_mock, mute_logger(TX_LOGGER):
+                    make_request_mock.side_effect = [answer, {}]
+                    tx._post_process()
+                    self._run_commit_hooks()
+                self.assertEqual(
+                    [call.args[1] for call in make_request_mock.call_args_list],
+                    ['GET', 'POST'] if is_acknowledged else ['GET'],
+                )
+
+    def test_a_payment_charged_after_the_cancellation_completes_the_transaction(self):
+        tx = self._create_epays_transaction(state='cancel')
+        with self._patch_payment_details(self._payment_data(tx)), \
+                mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(tx.state, 'done', "ePays's status wins over the cancellation.")
+        self.assertEqual(tx.epays_response_code, '00')
+
+    def test_the_cron_finds_a_payment_charged_after_the_cancellation(self):
+        tx = self._create_epays_transaction(state='cancel')
+        self._set_create_date(tx, fields.Datetime.now() - timedelta(minutes=10))
+        self._run_cron(lambda *args, **kwargs: self._payment_data(tx))
+        self.assertEqual(tx.state, 'done')
+
+    def test_a_cancelled_payment_that_ePays_did_not_charge_stays_cancelled(self):
+        for status in ('Voided', 'Cancelled', 'Expired', 'Pending', 'Failed', 'Refunded'):
+            with self.subTest(status=status):
+                tx = self._create_epays_transaction(state='cancel', state_message="Replaced.")
+                with self._patch_payment_details(self._payment_data(tx, status=status)), \
+                        mute_logger(TX_LOGGER):
+                    tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                self.assertEqual((tx.state, tx.state_message), ('cancel', "Replaced."))
+
+    def test_a_notification_days_later_completes_a_cancelled_payment(self):
+        """ ePays corrected the payment and sent its notification again: past the time the cron
+        looks back, as the cron voided the payment while ePays still reported it pending. """
+        tx = self._create_epays_transaction(state='cancel')
+        tx.last_state_change = fields.Datetime.now() - timedelta(days=10)
+        self._set_create_date(tx, fields.Datetime.now() - timedelta(days=10))
+        polled = []
+        self._run_cron(lambda provider, method, path, **kwargs: polled.append(path) or {})
+        self.assertEqual(polled, [], "The cron has stopped reading it.")
+        self.assertEqual(tx.state, 'cancel')
+
+        with self._patch_payment_details(self._payment_data(tx)), \
+                mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(tx.state, 'done')
+
+    def test_a_notification_days_later_changes_nothing_while_epays_was_not_corrected(self):
+        tx = self._create_epays_transaction(state='cancel', state_message="Voided.")
+        tx.last_state_change = fields.Datetime.now() - timedelta(days=10)
+        with self._patch_payment_details(self._payment_data(tx, status='Voided')), \
+                mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual((tx.state, tx.state_message), ('cancel', "Voided."))
+
+    def test_a_late_charge_that_does_not_match_is_refused(self):
+        tx = self._create_epays_transaction(state='cancel')
+        with self._patch_payment_details(self._payment_data(tx, amount='1.000')), \
+                mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(tx.state, 'error')
+        self.assertEqual(tx.epays_response_code, '00', "So it is left unacknowledged.")
+
+    def test_a_cancelled_payment_is_read_only_for_a_while_and_only_by_its_owner(self):
+        tx_old = self._create_epays_transaction(state='cancel')
+        tx_old.last_state_change = fields.Datetime.now() - const.LATE_CHARGE_WINDOW \
+            - timedelta(minutes=1)
+        tx_taken_over = self._create_epays_transaction(state='cancel')
+        self._create_epays_transaction(
+            state='draft', provider_reference=tx_taken_over.provider_reference
+        )
+        tx_recent = self._create_epays_transaction(state='cancel')
+        self.assertFalse(tx_old._epays_may_be_charged())
+        self.assertTrue(tx_old._epays_may_be_charged(const.LATE_NOTIFICATION_WINDOW))
+        self.assertFalse(tx_taken_over._epays_may_be_charged())
+        self.assertFalse(tx_taken_over._epays_may_be_charged(const.LATE_NOTIFICATION_WINDOW))
+        self.assertTrue(tx_recent._epays_may_be_charged())
+
+        self._set_create_date(tx_taken_over, fields.Datetime.now() - timedelta(minutes=10))
+        polled = []
+        self._run_cron(lambda provider, method, path, **kwargs: polled.append(path) or {})
+        self.assertEqual(polled, [], "The transaction that took the payment over reads it.")
+
+    def test_the_return_route_cannot_keep_reading_a_cancelled_payment(self):
+        """ A cancelled transaction stays readable for weeks, on a public route. """
+        tx = self._create_epays_transaction(state='cancel')
+        data = self._payment_data(tx, status='Voided', result='VOIDED')
+        with self._patch_payment_details(data) as make_request_mock, mute_logger(TX_LOGGER):
+            for _i in range(3):
+                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            self.assertEqual(make_request_mock.call_count, 1)
+            with patch.object(const, 'LATE_NOTIFICATION_MIN_INTERVAL', 0):
+                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            self.assertEqual(make_request_mock.call_count, 2, "Read again after the interval.")
+
+    def test_a_failed_read_does_not_use_up_the_next_one(self):
+        """ ePays notifies once: a timeout must leave the retry free to record the charge. """
+        tx = self._create_epays_transaction(state='cancel')
+        data = self._payment_data(tx)
+
+        def handler(provider, method, path, **kwargs):
+            raise EpaysApiError("unreachable", connection_error="read timed out", timed_out=True)
+
+        with self._patch_make_request(handler), self.assertRaises(ValidationError), \
+                mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        with self._patch_payment_details(data), mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(tx.state, 'done')
+
+    def test_a_read_retried_after_a_concurrency_error_still_records_the_charge(self):
+        """ Odoo runs the request again, after the ePays read, in the same process. """
+        tx = self._create_epays_transaction(state='cancel')
+        data = self._payment_data(tx)
+        with self._patch_payment_details(data) as make_request_mock, \
+                mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
+            with patch.object(
+                type(tx), '_epays_lock_for_update', side_effect=SerializationFailure
+            ), self.assertRaises(SerializationFailure):
+                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(make_request_mock.call_count, 2)
+        self.assertEqual(tx.state, 'done')
+
+    def test_the_cron_reads_a_cancelled_payment_whatever_its_age(self):
+        """ A long payment link can be cancelled after the age limit of the open ones. """
+        tx = self._create_epays_transaction(state='cancel')
+        self._set_create_date(tx, fields.Datetime.now() - const.CRON_MAX_AGE - timedelta(days=1))
+        data = self._payment_data(tx)
+        self._run_cron(lambda provider, method, path, **kwargs: data)
+        self.assertEqual(tx.state, 'done')
+
+    def test_a_cursor_failure_after_the_commit_does_not_reach_the_request(self):
+        tx = self._create_epays_transaction(state='done')
+        with patch.object(type(self.env.registry), 'cursor', side_effect=pool.PoolError), \
+                mute_logger(TX_LOGGER):
+            tx._epays_close_on_epays()  # Does not raise.
 
     def test_a_failed_acknowledgement_is_only_logged(self):
         for error in (
@@ -1524,6 +1692,8 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         for state in ('done', 'cancel'):
             with self.subTest(state=state):
                 tx = self._create_epays_transaction(state=state)
+                tx.last_state_change = fields.Datetime.now() - const.LATE_NOTIFICATION_WINDOW \
+                    - timedelta(minutes=1)
                 with self._patch_make_request(lambda *args, **kwargs: {}) as make_request_mock, \
                         mute_logger(TX_LOGGER):
                     tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
@@ -2228,7 +2398,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(tx_first.state, 'cancel')
         with self._patch_make_request(lambda *args, **kwargs: {}), \
                 mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
-            tx_second._post_process()  # Acknowledges the payment.
+            tx_second._post_process()
         self.assertEqual(order.state, 'sale')
 
     def test_a_started_transaction_sharing_the_payment_is_left_alone(self):

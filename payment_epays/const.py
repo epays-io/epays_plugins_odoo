@@ -48,9 +48,9 @@ REQUEST_TIMEOUT = 10
 # Creating a payment can take longer: ePays opens the gateway sessions. A slow answer no longer
 # blocks the next attempt, which has its own idempotency key (`_epays_get_idempotency_key`).
 PAYMENT_REQUEST_TIMEOUT = 30
-# Acknowledging a completed payment is shorter: the customer's status page waits on it, and a
-# failure only leaves the payment unacknowledged on ePays.
-ACKNOWLEDGEMENT_TIMEOUT = 5
+# The calls that follow the post-processing are shorter: the customer's status page waits on them,
+# and a failure only leaves a payment unacknowledged, or open until its link expires.
+POST_PROCESSING_TIMEOUT = 5
 
 # The credentials of a provider, and among them the secrets. A secret never leaves the server:
 # reading it returns SECRET_MASK once it is set, and writing SECRET_MASK back keeps the stored
@@ -130,6 +130,9 @@ PAYMENT_STATUS_MAPPING = {
     'cancel': ('cancelled', 'canceled', 'expired', 'voided'),
 }
 
+# The transaction states that count as paid, as in Odoo's `amount_paid`.
+PAID_TRANSACTION_STATES = ('authorized', 'done')
+
 # The response code of a payment the gateway approved: ePays completes a payment only with it.
 APPROVED_RESPONSE_CODE = '00'
 
@@ -149,11 +152,22 @@ UDF_ELLIPSIS = '…'
 # stays valid at least this long.
 REUSE_MIN_REMAINING_VALIDITY = timedelta(minutes=5)
 
-# The polling cron picks transactions in this age window.
+# The polling cron picks transactions from the minimum age, and still open ones up to the maximum: a
+# declined or cancelled one has its own limit, the expiry of its link or `LATE_CHARGE_WINDOW`.
 CRON_MIN_AGE = timedelta(minutes=5)
 CRON_MAX_AGE = timedelta(days=3)
 # A payment still pending this long after its link expired is voided on ePays.
 CRON_VOID_GRACE_PERIOD = timedelta(minutes=30)
+# ePays cannot stop a customer who is already past its payment page: a payment voided or cancelled
+# during 3-D Secure can still be charged, and ePays then reports it completed. Its status is the
+# truth, so a cancelled transaction keeps being read for this long.
+LATE_CHARGE_WINDOW = timedelta(hours=2)
+# ePays can also correct a payment days later and send its notification again, which Odoo answers
+# by reading the payment, for this long. The cron does not look that far back on its own.
+LATE_NOTIFICATION_WINDOW = timedelta(days=30)
+# The seconds between two reads of a cancelled transaction's payment for the public return route,
+# after one that found it not charged.
+LATE_NOTIFICATION_MIN_INTERVAL = 60
 # A payment request ePays answered too late may still have created the payment: the scheduled check
 # voids it once no click can still be waiting for it, and gives up after the maximum age.
 UNANSWERED_REQUEST_MIN_AGE = timedelta(minutes=2)

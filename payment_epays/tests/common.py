@@ -6,6 +6,7 @@ from unittest.mock import patch
 from odoo import fields
 
 from odoo.addons.payment.tests.common import PaymentCommon
+from odoo.addons.payment_epays.models.payment_transaction import LATE_NOTIFICATION_READS
 
 MAKE_REQUEST_PATH = (
     'odoo.addons.payment_epays.models.payment_provider.PaymentProvider._epays_make_request'
@@ -102,7 +103,17 @@ class EpaysCommon(PaymentCommon):
         }
         cls._reference_counter = 0
 
+    def setUp(self):
+        super().setUp()
+        LATE_NOTIFICATION_READS.clear()
+
     #=== Helpers ===#
+
+    def _run_commit_hooks(self):
+        """ Run what Odoo runs after a commit, which a test never does. """
+        self.env.flush_all()
+        self.env.cr.postcommit.run()
+        self.env.invalidate_all()
 
     def _new_reference(self, prefix='EPAYS-TX'):
         type(self)._reference_counter += 1

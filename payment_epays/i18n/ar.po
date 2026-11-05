@@ -728,6 +728,14 @@ msgstr "طريقة الدفع هذه لم تعد متاحة."
 
 #. module: payment_epays
 #. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
+"This payment was not needed: your order was already paid or cancelled. "
+"Please contact us to have it returned, quoting the reference %s."
+msgstr "لم تكن هذه الدفعة مطلوبة لأن طلبك مدفوع مسبقًا أو ملغى. يرجى التواصل معنا لاستردادها مع ذكر المرجع %s."
+
+#. module: payment_epays
+#. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid "This server's IP address"
 msgstr "عنوان IP لهذا الخادم"
@@ -909,6 +917,23 @@ msgstr "طلب دفع ePays لم يُرَد عليه"
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid "ePays answered with HTTP %(status)s %(code)s %(message)s"
 msgstr "ردّت ePays برمز HTTP %(status)s %(code)s %(message)s"
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
+"ePays charged %(charged)s for transaction %(reference)s, more than the "
+"%(due)s left to pay on these documents: refund the difference on ePays."
+msgstr "حصّل ePays مبلغ %(charged)s للمعاملة %(reference)s، وهو أكثر من %(due)s المتبقي دفعه على هذه المستندات: يرجى رد الفرق عبر ePays."
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
+"ePays charged the customer for payment %(payment)s (transaction "
+"%(reference)s) although these documents were already paid or cancelled. Odoo"
+" did not record it: refund it on ePays."
+msgstr "قام ePays بتحصيل المبلغ من العميل للدفعة %(payment)s (المعاملة %(reference)s) رغم أن هذه المستندات مدفوعة مسبقًا أو ملغاة. لم يسجلها Odoo: يرجى ردها عبر ePays."
 
 #. module: payment_epays
 #. odoo-python

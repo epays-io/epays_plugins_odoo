@@ -1,10 +1,11 @@
 # ePays for Odoo — what is left
 
-Status on 2026-11-03. The addon (`payment_epays` 18.0.1.0.6, not yet on the store) is
-feature-complete and tested: 140 tests with sales and accounting, 134 with the module alone, lint
+Status on 2026-11-04. The addon (`payment_epays` 18.0.1.0.6, not yet on the store) is
+feature-complete and tested: 173 tests with sales and accounting, 147 with the module alone, lint
 clean, upgraded from 18.0.1.0.5. 18.0.1.0.6 acknowledges finished payments on ePays
 (`POST /api/v2/Payments/{id}/acknowledgement`): completed, declined and cancelled, but not money
-ePays took that Odoo refused. 18.0.1.0.5 was tested
+ePays took that Odoo refused. It also follows ePays when a payment Odoo voided is charged anyway
+(3-D Secure answered after the void), tested on the local API with two tabs. 18.0.1.0.5 was tested
 end-to-end against the local API (new v2 names) and the sandbox (old names): shop approval,
 decline and cancel in English and Arabic, the individual Card method, Sync from ePays, a USD
 invoice paid from its portal link (charged in BHD), a payment request answered too late and its
@@ -88,7 +89,12 @@ For every shop that uses the addon:
       any currency code. The addon always sends BHD; other clients are not protected.
 - [ ] **Exchange rates**: shops selling in other currencies need up-to-date rates (Accounting >
       Settings > *Automatic Currency Rates*); include it in merchant onboarding?
-- [ ] **Refunds**: out of scope for this version (payments only).
+- [ ] **Refunds**: out of scope for this version (payments only). A customer who paid an order
+      twice is refunded by the merchant on ePays; Odoo notes it on the order, and the customer is
+      not told on the page (the confirmation shows the payment that counted).
+- [ ] **A payment corrected on ePays after Odoo cancelled it**: past two hours the shop only sees
+      it when ePays resends the notification (`POST /api/v2/Payments/{id}/notify-deliveries`), for
+      up to 30 days. Who at ePays runs that reconciliation, and when?
 
 ## 6. Clean up the development environment
 

@@ -67,12 +67,24 @@ class EpaysPostProcessing(PaymentPostProcessing):
         The shop's own landing route empties the cart and shows the unpaid order as if it were
         confirmed, with the reason in small print; from the payment step the customer sees why and
         pays again with one click.
+
+        The customer may be waiting on an attempt that another ePays payment made pointless, e.g.
+        the one voided for it, charged after all: the page then follows the payment that counts.
+        A charge Odoo refused is not pointless: that customer must read about it, on the
+        confirmation page, as the payment step of a paid or cancelled order has nothing to show.
         """
+        monitored_tx = self._get_monitored_transaction()
+        if monitored_tx.provider_code == 'epays' and monitored_tx.state != 'done' \
+                and not monitored_tx._epays_is_refused():
+            paying_txs = monitored_tx._epays_get_paying_transactions()
+            if paying_txs:
+                self.monitor_transaction(paying_txs[:1])
         values = super().poll_status(**kwargs)
         is_shop_failure = (
             values.get('provider_code') == 'epays'
             and values.get('state') in ('error', 'cancel')
             and urlsplit(values.get('landing_route') or '').path == const.SHOP_LANDING_ROUTE
+            and not (monitored_tx._epays_is_refused() and not monitored_tx._epays_is_needed())
         )
         if is_shop_failure:
             values['landing_route'] = f'{const.SHOP_PAYMENT_ROUTE}?{const.FAILURE_QUERY_PARAM}=1'

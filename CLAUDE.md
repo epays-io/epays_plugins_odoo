@@ -67,15 +67,39 @@ early for other providers.
      transaction holds (`GET /api/v2/Payments?status=pending&udf2=…`). Each attempt has its own
      idempotency key (`_epays_get_idempotency_key`): the rolled-back reference comes back. Tests
      for it cannot use Odoo's `assertRaises`, which rolls the separate cursor's write back too.
-  6. `_post_process` acknowledges `done`, `error` and `cancel` payments
-     (`POST /api/v2/Payments/{id}/acknowledgement`), after the state is committed and the order
-     recorded, except money ePays took that Odoo refused (`error` with response code `00`), left
-     for the merchant in ePays's unacknowledged list. ePays clears the mark when a payment later
-     completes, so a declined payment paid on the same link is notified again. It is informational:
-     a failure, e.g. the bare 404 of a server before the endpoint, is only logged. Odoo's state and
-     `is_post_processed` prevent double processing.
+  6. `_post_process` registers a commit hook, `_epays_close_on_epays`, because `account_payment`
+     wraps this override: the accounting payment does not exist yet when it runs. The hook runs in
+     its own cursor, as writes after a commit are lost on the committed one, and swallows failures,
+     as the request is already committed. A test must call `_run_commit_hooks`: test cursors
+     never run them. It acknowledges `done`, `error` and `cancel` payments
+     (`POST /api/v2/Payments/{id}/acknowledgement`), except money ePays took that Odoo refused
+     (`_epays_is_refused`: `error` with response code `00`, written even if the server sent none),
+     left for the merchant in ePays's unacknowledged list. `error` and `cancel` are read from ePays first
+     (`_epays_took_no_money`): Odoo's state can lag behind a charge. ePays clears the mark when a
+     payment later completes, so a declined payment paid on the same link is notified again. It is
+     informational: a failure, e.g. the bare 404 of a server before the endpoint, is only logged.
+     Odoo's state and `is_post_processed` prevent double processing.
      With `account_payment` installed, Odoo's `PaymentCommon` stubs its `_post_process`, cutting the
      ePays override out too: `EpaysAccountingTest` tests it for real.
+  7. **ePays is the source of truth, not Odoo's `cancel`.** ePays cannot refuse a charge once the
+     customer is past its page: a payment voided during 3-D Secure is still charged and turns
+     `completed`. So a cancelled transaction is read by the cron for `const.LATE_CHARGE_WINDOW`, and
+     by the return route for `const.LATE_NOTIFICATION_WINDOW` (not again for
+     `const.LATE_NOTIFICATION_MIN_INTERVAL`, per process, once a read found no charge; a failed or
+     retried read does not count, as ePays notifies once), as ePays can correct a payment days
+     later and resend its notification (`POST /api/v2/Payments/{id}/notify-deliveries`; correct the
+     status first, Odoo reads it). See `_epays_may_be_charged`: not when a newer transaction took
+     the payment over. Only a `done` target moves it (`_set_done`/`_set_error` with `cancel`
+     allowed). `_epays_complete` locks the documents' transactions, then asks the accounting what
+     is due (`_epays_get_amount_due`: residuals and Odoo's paid transactions, not a sum of
+     attempts; a cancelled document is owed nothing). Nothing due: refused with response code `00`,
+     noted on the documents and left for a refund on ePays. Something due, even less than the
+     charge: done, and an overpayment is noted. A second transaction holding the same ePays payment
+     (`_epays_get_payment_holders`) is one charge, not a refusal. A done payment voids the other
+     attempts no longer needed on its documents (`_epays_void_other_attempts`, declined ones too:
+     ePays lets them retry on the same link). `poll_status` and `_get_last` follow the transaction
+     that paid, so a customer who paid never waits on, or reads about, a replacement that was
+     voided; a refused charge is the exception, shown even when it is the older transaction.
 - **Currency**: ePays only charges `BHD` (`const.CHARGE_CURRENCY`); other currencies are converted
   with Odoo rates at initiation and the conversion recorded on the transaction.
 - **Payment methods** (`data/payment_method_data.xml`, `models/payment_method.py`): one generic

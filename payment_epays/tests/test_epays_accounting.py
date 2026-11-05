@@ -11,8 +11,10 @@ from odoo.tests import tagged
 from odoo.tests.common import get_db_name
 from odoo.tools import mute_logger
 
+from odoo.addons.payment.controllers.post_processing import PaymentPostProcessing
 from odoo.addons.payment.tests.http_common import PaymentHttpCommon
-from odoo.addons.payment_epays.controllers.main import EpaysController
+from odoo.addons.payment_epays import const
+from odoo.addons.payment_epays.controllers.main import EpaysController, EpaysPostProcessing
 from odoo.addons.payment_epays.tests.common import REQUESTS_PATH, EpaysCommon, FakeResponse
 from odoo.addons.payment_epays.utils import EpaysApiError
 
@@ -69,6 +71,7 @@ if AccountPaymentCommon is not None:
             with patch.object(self.env.cr, 'commit'), patch.object(self.env.cr, 'rollback'), \
                     mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER):
                 self.env['payment.transaction']._cron_epays_poll_pending()
+                self._run_commit_hooks()
 
         def _set_create_date(self, tx, create_date):
             self.env.cr.execute(
@@ -101,8 +104,10 @@ if AccountPaymentCommon is not None:
                 (method, path)
             ) or {}):
                 tx._post_process()
-            self._assert_payment_posted(tx)
-            self.assertEqual(order.state, 'sale')
+                self.assertEqual(calls, [], "ePays hears of nothing a failure can still roll back.")
+                self._assert_payment_posted(tx)
+                self.assertEqual(order.state, 'sale')
+                self._run_commit_hooks()
             self.assertEqual(
                 calls, [('POST', f'/api/v2/Payments/{tx.provider_reference}/acknowledgement')],
                 "Odoo acknowledges the payment once it recorded it.",
@@ -120,13 +125,18 @@ if AccountPaymentCommon is not None:
                     tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
             self.assertEqual((declined.state, refused.state), ('error', 'error'))
 
-            paths = []
-            with self._patch_make_request(lambda provider, method, path, **kwargs: paths.append(
-                path
-            ) or {}):
+            calls = []
+
+            def handler(provider, method, path, **kwargs):
+                calls.append((method, path))
+                return {'status': 'Failed'}
+
+            with self._patch_make_request(handler):
                 (declined | refused)._post_process()
+                self._run_commit_hooks()
+            path = f'/api/v2/Payments/{declined.provider_reference}'
             self.assertEqual(
-                paths, [f'/api/v2/Payments/{declined.provider_reference}/acknowledgement'],
+                calls, [('GET', path), ('POST', f'{path}/acknowledgement')],
                 "The refused payment stays among the ones ePays lists for the merchant to check.",
             )
             self.assertFalse((declined | refused).payment_id, "No accounting payment for either.")
@@ -146,9 +156,376 @@ if AccountPaymentCommon is not None:
 
             with self._patch_make_request(handler):
                 tx._post_process()
+                self._run_commit_hooks()
             self.assertTrue(tx.is_post_processed)
             self._assert_payment_posted(tx)
             self.assertEqual(order.state, 'sale')
+
+        def _order_and_attempts(self, *states):
+            """ Return a draft order and one ePays transaction per state on it. """
+            order = self._create_sale_order(confirm=False, currency_id=self.currency.id)
+            return order, [self._create_epays_transaction(
+                state=state, amount=order.amount_total, sale_order_ids=[Command.set(order.ids)],
+            ) for state in states]
+
+        def _notify(self, tx, **overrides):
+            with self._patch_payment_details(self._payment_data(tx, **overrides)):
+                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+
+        def _notes(self, document, text):
+            return document.message_ids.filtered(lambda m: text in (m.body or ''))
+
+        def _post_process_recording_calls(self, txs):
+            """ Post-process the transactions, with ePays accepting every call. """
+            calls = []
+
+            def handler(provider, method, path, **kwargs):
+                calls.append((method, path))
+                return {'status': 'Voided', 'paymentId': path.rsplit('/', 1)[1]}
+
+            with self._patch_make_request(handler):
+                txs._post_process()
+                self._run_commit_hooks()
+            return calls
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_voided_payment_charged_late_pays_the_order_and_closes_the_replacement(self):
+            """ Voided while the customer was on 3-D Secure, charged by ePays anyway. """
+            self.ensure_installed('sale')
+            order, (voided, replacement) = self._order_and_attempts('cancel', 'draft')
+            self._notify(voided)
+            self.assertEqual(voided.state, 'done')
+
+            calls = self._post_process_recording_calls(voided)
+            self._assert_payment_posted(voided)
+            self.assertEqual(order.state, 'sale')
+            self.assertEqual(replacement.state, 'cancel', "The replacement must not be paid too.")
+            self.assertEqual(
+                order.get_portal_last_transaction(), voided,
+                "The customer who paid does not read that the payment was cancelled.",
+            )
+            self.assertEqual(calls, [
+                ('DELETE', f'/api/v2/Payments/{replacement.provider_reference}'),
+                ('POST', f'/api/v2/Payments/{voided.provider_reference}/acknowledgement'),
+            ])
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_notification_days_later_pays_the_order_through_the_cron(self):
+            """ A server notification has no customer session: the cron finishes the work. """
+            self.ensure_installed('sale')
+            order, (cancelled,) = self._order_and_attempts('cancel')
+            cancelled.last_state_change = fields.Datetime.now() - timedelta(days=10)
+            self._notify(cancelled)
+            self.assertEqual(cancelled.state, 'done')
+            self.assertEqual(order.state, 'draft', "Not post-processed yet.")
+
+            calls = []
+            with patch(REQUESTS_PATH, side_effect=self._fake_api(cancelled, calls)):
+                self._run_cron()
+            self._assert_payment_posted(cancelled)
+            self.assertEqual(order.state, 'sale')
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_declined_link_is_closed_once_the_order_is_paid(self):
+            """ ePays lets the customer retry a declined payment on the same link. """
+            self.ensure_installed('sale')
+            order, (paid, declined) = self._order_and_attempts('draft', 'error')
+            declined.epays_response_code = '51'
+            self._notify(paid)
+            self._post_process_recording_calls(paid)
+            self.assertEqual(paid.state, 'done')
+            self.assertEqual(declined.state, 'cancel')
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_second_charge_is_kept_out_of_the_books_for_the_merchant_to_refund(self):
+            self.ensure_installed('sale')
+            for name, late_state in (('voided', 'cancel'), ('declined, then retried', 'error')):
+                with self.subTest(name):
+                    order, (late, paid) = self._order_and_attempts(late_state, 'draft')
+                    late.epays_response_code = '51' if late_state == 'error' else False
+                    self._notify(paid)
+                    self._post_process_recording_calls(paid | late)
+                    late.state = late_state  # Closing the other attempts may have moved it.
+                    self.assertEqual(order.state, 'sale')
+
+                    self._notify(late)
+                    self.assertEqual(late.state, 'error')
+                    self.assertEqual(late.epays_response_code, '00')
+                    self.assertIn('already paid', late.state_message)
+                    self.assertTrue(self._notes(order, 'refund it on ePays'))
+                    self.assertEqual(
+                        order.get_portal_last_transaction(), late,
+                        "The customer reads about it, although the other transaction is newer.",
+                    )
+
+                    calls = self._post_process_recording_calls(late)
+                    self.assertEqual(calls, [], "Left unacknowledged, for the merchant to find.")
+                    self.assertFalse(late.payment_id)
+                    self.assertEqual(paid.payment_id.amount, order.amount_total)
+
+                    notes = len(order.message_ids)
+                    self._notify(late)  # The cron reads it until its link expires.
+                    self.assertEqual(len(order.message_ids), notes, "The merchant is told once.")
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_paying_the_rest_of_an_invoice_is_not_a_second_charge(self):
+            invoice = self.init_invoice(
+                'out_invoice', partner=self.partner, amounts=[100.0], post=True,
+                currency=self.currency,
+            )
+            first, second = (self._create_epays_transaction(
+                amount=amount, invoice_ids=[Command.set(invoice.ids)],
+            ) for amount in (invoice.amount_total / 2, invoice.amount_total / 2))
+            self._notify(first)
+            self._post_process_recording_calls(first)
+            self.assertEqual(second.state, 'draft', "The rest of the invoice is still due.")
+            self._notify(second)
+            self.assertEqual(second.state, 'done')
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_the_status_page_follows_the_payment_that_paid_the_order(self):
+            self.ensure_installed('sale')
+            _order, (charged, watched) = self._order_and_attempts('cancel', 'draft')
+
+            def poll(controller, monitored):
+                polled_values = {
+                    'provider_code': 'epays', 'state': 'done',
+                    'landing_route': '/shop/payment/validate',
+                }
+                with patch.object(
+                    EpaysPostProcessing, '_get_monitored_transaction', return_value=monitored,
+                ), patch.object(
+                    PaymentPostProcessing, 'poll_status', return_value=polled_values,
+                ), patch.object(EpaysPostProcessing, 'monitor_transaction') as monitor_mock:
+                    controller.poll_status()
+                return monitor_mock
+
+            poll(EpaysPostProcessing(), watched).assert_not_called()
+            self._notify(charged)
+            self.assertEqual(charged.state, 'done')
+            poll(EpaysPostProcessing(), watched).assert_called_once_with(charged)
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_the_status_page_keeps_a_refused_charge_for_the_customer_to_read(self):
+            self.ensure_installed('sale')
+            order, (paid, refused) = self._order_and_attempts('draft', 'cancel')
+            self._notify(paid)
+            self._post_process_recording_calls(paid)
+            refused.state = 'cancel'
+            self._notify(refused)
+            self.assertTrue(refused._epays_is_refused())
+            landing_route = '/shop/payment/validate'
+
+            with patch.object(
+                EpaysPostProcessing, '_get_monitored_transaction', return_value=refused,
+            ), patch.object(PaymentPostProcessing, 'poll_status', return_value={
+                'provider_code': 'epays', 'state': 'error', 'landing_route': landing_route,
+            }), patch.object(EpaysPostProcessing, 'monitor_transaction') as monitor_mock:
+                values = EpaysPostProcessing().poll_status()
+            monitor_mock.assert_not_called()
+            self.assertEqual(
+                values['landing_route'], landing_route,
+                "The payment step of a paid order has nothing to show: the confirmation page does.",
+            )
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_refused_charge_gives_way_to_a_later_payment(self):
+            self.ensure_installed('sale')
+            order, (refused, paid) = self._order_and_attempts('draft', 'draft')
+            self._notify(refused, amount='1.000')
+            self.assertTrue(refused._epays_is_refused())
+            self._notify(paid)
+            paid.last_state_change = refused.last_state_change + timedelta(minutes=5)
+            self.assertEqual(order.get_portal_last_transaction(), paid)
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_charge_on_an_invoice_settled_without_a_transaction_is_refused(self):
+            invoice = self.init_invoice(
+                'out_invoice', partner=self.partner, amounts=[100.0], post=True,
+                currency=self.currency,
+            )
+            tx = self._create_epays_transaction(
+                state='cancel', amount=invoice.amount_total, invoice_ids=[Command.set(invoice.ids)],
+            )
+            self.env['account.payment.register'].with_context(
+                active_model='account.move', active_ids=invoice.ids,
+            ).create({})._create_payments()
+            self.assertEqual(invoice.amount_residual, 0)
+
+            self._notify(tx)
+            self.assertTrue(tx._epays_is_refused())
+            self.assertTrue(self._notes(invoice, 'refund it on ePays'))
+            self._post_process_recording_calls(tx)
+            self.assertFalse(tx.payment_id)
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_charge_on_an_order_paid_through_its_invoice_is_refused(self):
+            self.ensure_installed('sale')
+            order, (voided,) = self._order_and_attempts('cancel')
+            order.action_confirm()
+            for line in order.order_line:
+                line.qty_delivered = line.product_uom_qty
+            invoice = order._create_invoices()
+            invoice.action_post()
+            on_invoice = self._create_epays_transaction(
+                amount=invoice.amount_total, invoice_ids=[Command.set(invoice.ids)],
+            )
+            self.assertNotIn(on_invoice, order.transaction_ids)
+            self._notify(on_invoice)
+            self._post_process_recording_calls(on_invoice)
+            self.assertEqual(on_invoice.state, 'done')
+
+            self._notify(voided)
+            self.assertTrue(voided._epays_is_refused())
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_paying_a_reopened_invoice_is_not_a_second_charge(self):
+            invoice = self.init_invoice(
+                'out_invoice', partner=self.partner, amounts=[100.0], post=True,
+                currency=self.currency,
+            )
+            first, second = (self._create_epays_transaction(
+                amount=invoice.amount_total, invoice_ids=[Command.set(invoice.ids)],
+            ) for _i in range(2))
+            self._notify(first)
+            self.assertFalse(second._epays_is_needed(), "Not recorded yet, but paid all the same.")
+            self._post_process_recording_calls(first)
+            self.assertEqual(second.state, 'cancel', "Closed along with the invoice.")
+
+            invoice.line_ids.remove_move_reconcile()  # E.g. after a refund on ePays.
+            self.assertTrue(second._epays_is_needed())
+            second.state = 'draft'
+            self._notify(second)
+            self.assertEqual(second.state, 'done')
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_charge_on_a_cancelled_document_is_refused(self):
+            self.ensure_installed('sale')
+            order, (on_order,) = self._order_and_attempts('cancel')
+            order._action_cancel()
+            invoice = self.init_invoice(
+                'out_invoice', partner=self.partner, amounts=[100.0], post=True,
+                currency=self.currency,
+            )
+            on_invoice = self._create_epays_transaction(
+                state='cancel', amount=invoice.amount_total, invoice_ids=[Command.set(invoice.ids)],
+            )
+            invoice.button_draft()
+            invoice.button_cancel()
+            for tx, document in ((on_order, order), (on_invoice, invoice)):
+                self._notify(tx)
+                self.assertTrue(tx._epays_is_refused())
+                self.assertTrue(self._notes(document, 'refund it on ePays'))
+                self.assertEqual(self._post_process_recording_calls(tx), [])
+                self.assertFalse(tx.payment_id)
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_charge_on_a_deleted_document_is_refused(self):
+            self.ensure_installed('sale')
+            order, (tx,) = self._order_and_attempts('cancel')
+            tx.epays_udf2 = order.name
+            order._action_cancel()
+            order.unlink()
+            self.env.invalidate_all()
+            self._notify(tx)
+            self.assertTrue(tx._epays_is_refused())
+            self.assertEqual(self._post_process_recording_calls(tx), [])
+            self.assertFalse(tx.payment_id)
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_one_payment_held_by_two_attempts_is_not_a_second_charge(self):
+            """ An older ePays server returns one payment to two attempts. """
+            self.ensure_installed('sale')
+            order, (older, newer) = self._order_and_attempts('pending', 'draft')
+            newer.write({field: older[field] for field in ('provider_reference', 'epays_udf2')})
+            newer._epays_apply_payment_details(self._payment_data(newer))
+            self._post_process_recording_calls(newer)
+            self.assertEqual(newer.state, 'done')
+
+            older._epays_apply_payment_details(self._payment_data(older))
+            self.assertEqual(older.state, 'cancel')
+            self.assertFalse(older._epays_is_refused())
+            self.assertFalse(self._notes(order, 'refund it on ePays'))
+            self.assertEqual(newer.payment_id.amount, order.amount_total)
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_attempts_completing_at_once_wait_for_each_other(self):
+            self.ensure_installed('sale')
+            _order, (first, second) = self._order_and_attempts('draft', 'draft')
+            with patch.object(
+                type(first), '_epays_lock_for_update', autospec=True,
+            ) as lock_mock:
+                self._notify(first)
+            self.assertEqual(lock_mock.call_args.args[0], first | second)
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_the_payment_that_settles_a_changed_cart_is_not_refused(self):
+            """ The first attempt was for a smaller cart, and was charged after all. """
+            self.ensure_installed('sale')
+            order = self._create_sale_order(confirm=False, currency_id=self.currency.id)
+            total = order.amount_total
+            smaller, current = (self._create_epays_transaction(
+                state=state, amount=amount, sale_order_ids=[Command.set(order.ids)],
+            ) for state, amount in (('cancel', total / 2), ('draft', total)))
+            self._notify(smaller)
+            self._post_process_recording_calls(smaller)
+            self.assertEqual(smaller.state, 'done')
+            self.assertEqual(order.state, 'draft', "Half of the order is still due.")
+
+            self._notify(current)
+            self._post_process_recording_calls(current)
+            self.assertEqual(current.state, 'done')
+            self.assertEqual(order.state, 'sale')
+            self.assertTrue(
+                self._notes(order, 'refund the difference on ePays'),
+                "The customer paid more than the order: the merchant must know.",
+            )
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_refused_charge_stays_refused_without_a_response_code(self):
+            self.ensure_installed('sale')
+            order, (paid, late) = self._order_and_attempts('draft', 'cancel')
+            self._notify(paid)
+            self._post_process_recording_calls(paid)
+            late.state = 'cancel'
+
+            self._notify(late, responseCode=None)
+            self.assertTrue(late._epays_is_refused())
+            notes = len(order.message_ids)
+            changed = late.last_state_change
+            late._epays_apply_payment_details(self._payment_data(late, responseCode=None))
+            self.assertEqual(len(order.message_ids), notes, "Refused once.")
+            self.assertEqual(late.last_state_change, changed)
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_voiding_the_other_attempts_does_not_keep_the_customer_waiting(self):
+            self.ensure_installed('sale')
+            _order, (paid, other) = self._order_and_attempts('draft', 'draft')
+            self._notify(paid)
+            timeouts = {}
+
+            def handler(provider, method, path, timeout=None, **kwargs):
+                timeouts[method] = timeout
+                return {'status': 'Voided'}
+
+            with self._patch_make_request(handler):
+                paid._post_process()
+                self._run_commit_hooks()
+            self.assertEqual(other.state, 'cancel')
+            self.assertEqual(timeouts, {
+                'DELETE': const.POST_PROCESSING_TIMEOUT, 'POST': const.POST_PROCESSING_TIMEOUT,
+            })
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_failure_after_the_commit_does_not_reach_the_request(self):
+            tx = self._create_epays_transaction(state='done')
+
+            def handler(provider, method, path, **kwargs):
+                raise RuntimeError("not an API error")
+
+            with self._patch_make_request(handler):
+                tx._post_process()
+                self._run_commit_hooks()  # Does not raise.
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
         def test_portal_invoice_payment(self):
@@ -177,6 +554,7 @@ if AccountPaymentCommon is not None:
 
             with self._patch_make_request(lambda *args, **kwargs: {}):
                 tx._post_process()
+                self._run_commit_hooks()
             self._assert_payment_posted(tx)
             self.assertIn(invoice.payment_state, ('paid', 'in_payment'))
 

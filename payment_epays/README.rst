@@ -408,9 +408,17 @@ What the addon does:
 * A completed payment is recorded once, however many times ePays, the customer's browser and the
   scheduled action report it. Once Odoo has recorded a payment's result (completed, declined or
   cancelled), it acknowledges the payment on ePays, so ePays stops notifying it. A payment ePays
-  took but Odoo refused (wrong amount or order, refunded) is left unacknowledged, so that it stays
-  in ePays's list of payments to check. An ePays server without acknowledgements yet only gets a
-  line in the server log.
+  took but Odoo refused (wrong amount or order, refunded, a second payment) is left unacknowledged,
+  so that it stays in ePays's list of payments to check. An ePays server without acknowledgements
+  yet only gets a line in the server log.
+* ePays's status is the reference. A customer already past the ePays page, e.g. on 3-D Secure, can
+  still be charged for a payment Odoo voided or cancelled, so Odoo keeps checking a cancelled payment
+  for two hours. ePays can also correct a payment later and send its notification again: Odoo reads
+  a cancelled payment each time it is notified, for 30 days. If it was charged, it pays the order and
+  the other payment still open on that order is voided. If the order or invoice was already paid,
+  in any way, or was cancelled, Odoo does not record the charge: it tells the customer, notes it on
+  the document and leaves it on ePays to refund. A charge above what is left to pay is recorded,
+  with a note about the difference to refund.
 * Calls to ePays use https with certificate checking, on the fixed server of the chosen mode, and
   never follow a redirect, so the master key is only ever sent to ePays.
 * The API master keys never leave the server. Once saved, a key is shown as ``********`` and is
