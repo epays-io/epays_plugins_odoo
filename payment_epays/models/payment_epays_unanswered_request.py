@@ -86,8 +86,8 @@ class PaymentEpaysUnansweredRequest(models.Model):
                 continue
             try:
                 with self.env.cr.savepoint():
-                    request._epays_void_orphan_payments()
-                    request.unlink()
+                    if request._epays_void_orphan_payments():
+                        request.unlink()
                 self.env.cr.commit()
             except ValidationError as error:  # ePays unreachable: retried by the next run.
                 _logger.warning(
@@ -104,11 +104,13 @@ class PaymentEpaysUnansweredRequest(models.Model):
 
         Note: self.ensure_one()
 
-        :return: None
+        :return: Whether the request is finished: a refused void leaves it for the next run.
+        :rtype: bool
         :raise EpaysApiError: If ePays cannot list the payments.
         """
         self.ensure_one()
         provider = self.provider_id
+        is_finished = True
         query = urlencode({'status': 'pending', 'udf2': self.udf2, 'limit': 100})
         data = provider._epays_make_request(
             'GET', f'{const.PAYMENTS_PATH}?{query}',
@@ -142,11 +144,34 @@ class PaymentEpaysUnansweredRequest(models.Model):
                     environment=self.environment, domain=self.merchant_domain,
                 )
             except EpaysApiError:
-                # Paid or closed meanwhile: ePays voids only a pending payment.
+                # Paid or closed meanwhile, and no longer listed by the next run; or the customer is
+                # paying it, and it stays payable until ePays allows the void.
                 _logger.info("ePays refused to void the orphan payment %s", payment_id)
+                is_finished = False
                 continue
+            self._epays_acknowledge_orphan(payment_id)
             _logger.warning(
                 "voided the ePays payment %s of %s: no transaction holds it (created for "
                 "transaction %s, whose request ePays answered too late)",
                 payment_id, self.udf2, self.reference,
             )
+        return is_finished
+
+    def _epays_acknowledge_orphan(self, payment_id):
+        """ Acknowledge a voided orphan: it took no money, and would bury in ePays's unacknowledged
+        list the charges the merchant has to act on. Informational: a failure is only logged.
+
+        Note: self.ensure_one()
+
+        :param str payment_id: The ePays payment id.
+        :return: None
+        """
+        self.ensure_one()
+        try:
+            self.provider_id._epays_make_request(
+                'POST', f'{const.PAYMENTS_PATH}/{quote(payment_id, safe="")}/acknowledgement',
+                environment=self.environment, domain=self.merchant_domain,
+                timeout=const.POST_PROCESSING_TIMEOUT,
+            )
+        except EpaysApiError:
+            _logger.info("ePays did not acknowledge the orphan payment %s", payment_id)

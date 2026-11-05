@@ -6,7 +6,7 @@ from unittest.mock import patch
 from odoo import fields
 
 from odoo.addons.payment.tests.common import PaymentCommon
-from odoo.addons.payment_epays.models.payment_transaction import LATE_NOTIFICATION_READS
+from odoo.addons.payment_epays.models.payment_transaction import PAYMENT_READS
 
 MAKE_REQUEST_PATH = (
     'odoo.addons.payment_epays.models.payment_provider.PaymentProvider._epays_make_request'
@@ -105,7 +105,7 @@ class EpaysCommon(PaymentCommon):
 
     def setUp(self):
         super().setUp()
-        LATE_NOTIFICATION_READS.clear()
+        PAYMENT_READS.clear()
 
     #=== Helpers ===#
 
@@ -143,6 +143,9 @@ class EpaysCommon(PaymentCommon):
             'epays_udf2': values.get('epays_udf2', custom_fields['udf2']),
             'epays_udf3': values.get('epays_udf3', custom_fields['udf3']),
         })
+        # A transaction cancelled through `_set_canceled` is watched.
+        if tx.state == 'cancel' and 'epays_watch_until' not in values:
+            tx.epays_watch_until = tx._epays_get_watch_limit()
         return tx
 
     def _payment_data(self, tx, **overrides):
@@ -176,6 +179,9 @@ class EpaysCommon(PaymentCommon):
             'gatewayResponse': dict(self.gateway_response),
         }
         data.update(overrides)
+        # ePays sets `transactionId` when the customer pays, so a pending payment has none.
+        if 'transactionId' not in overrides and str(data['status']).lower() == 'pending':
+            data['transactionId'] = None
         return data
 
     def _patch_make_request(self, handler):

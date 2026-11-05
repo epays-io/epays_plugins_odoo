@@ -214,7 +214,8 @@ Or from the browser, after restarting Odoo: activate the developer mode, open *A
 *Apps* filter, search for **ePays**, open its menu (**⋮**) and click **Upgrade**.
 
 The update runs the version's migrations on its own (for example 18.0.1.0.1 removed the old BHD
-limit, 18.0.1.0.3 moved the saved server IP address); nothing else needs to be done by hand.
+limit, 18.0.1.0.3 moved the saved server IP address, 18.0.1.0.7 encrypts the saved master keys);
+nothing else needs to be done by hand.
 
 #### 3. Check
 
@@ -252,6 +253,7 @@ sudo systemctl start odoo
 
 | Version | Changes | Update notes |
 |---|---|---|
+| 18.0.1.0.7 | Master keys encrypted in the database; same payment logic as the WooCommerce plugin | Needs the Python `cryptography` package, which the official `odoo:18` image includes. Set `epays_encryption_key` in `odoo.conf` before updating if you want your own key: changing it later means entering the master keys again. |
 | 18.0.1.0.3 | This server's IP address stored as a system parameter | Fixes *Upgrade* from the browser failing with `epays_server_ip does not exist`. |
 | 18.0.1.0.2 | *Find this server's IP address*; ePays provider in every company | Adds a column: update from the command line. |
 | 18.0.1.0.1 | Payments in other currencies converted to BHD; master keys never sent to the browser | Removes the old BHD-only limits. |

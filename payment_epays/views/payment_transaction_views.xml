@@ -6,12 +6,25 @@
         <field name="model">payment.transaction</field>
         <field name="inherit_id" ref="payment.payment_transaction_form"/>
         <field name="arch" type="xml">
+            <xpath expr="//header/field[@name='state']" position="before">
+                <field name="provider_code" invisible="1"/>
+                <field name="epays_review_needed" invisible="1"/>
+                <button type="object" name="action_epays_check_status"
+                        string="Check ePays Status"
+                        invisible="provider_code != 'epays' or not provider_reference"/>
+                <button type="object" name="action_epays_release_review"
+                        string="Allow a New Payment"
+                        invisible="provider_code != 'epays' or not epays_review_needed"
+                        confirm="Allow new payments on these documents? Refund the charge on ePays first if it is not needed."/>
+            </xpath>
             <xpath expr="//group[@name='transaction_details']/.." position="after">
                 <group string="ePays" name="epays_details" invisible="provider_code != 'epays'">
                     <group name="epays_payment">
                         <field name="epays_environment"/>
                         <field name="epays_merchant_domain"/>
                         <field name="epays_expires_at"/>
+                        <field name="epays_watch_until" invisible="not epays_watch_until"/>
+                        <field name="epays_at_bank" invisible="not epays_at_bank"/>
                         <field name="epays_payment_url" widget="url" groups="base.group_system"/>
                         <field name="epays_gateway_requested"/>
                         <field name="epays_charged_amount"/>

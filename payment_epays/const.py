@@ -60,6 +60,12 @@ CREDENTIAL_FIELDS = (
 )
 SECRET_FIELDS = ('epays_master_key', 'epays_sandbox_master_key')
 SECRET_MASK = '********'
+# What starts a master key encrypted at rest, as in the WooCommerce plugin. The `odoo.conf` option
+# and the environment variable holding the encryption key; without either, `database.secret`, which
+# is in the same database, so only a configured key protects a master key from a full dump.
+SECRET_PREFIX = 'epays1:'
+ENCRYPTION_KEY_OPTION = 'epays_encryption_key'
+ENCRYPTION_KEY_VARIABLE = 'EPAYS_ENCRYPTION_KEY'
 
 # The only currency ePays takes payments in (ISO 4217). A payment in another currency is converted
 # to it with Odoo's exchange rate before it is sent to ePays.
@@ -110,6 +116,10 @@ GATEWAY_TYPE_PAYMENT_METHOD_CODES = {
     9: 'epays_samsung_pay',
 }
 
+# Pages of `GET /api/v2/gateways` read by a sync, of 100 gateways each.
+GATEWAY_SYNC_MAX_PAGES = 10
+GATEWAY_SYNC_PAGE_SIZE = 100
+
 # ePays gateway types that are integrations rather than checkout payment methods (Zoho, Odoo).
 NON_CHECKOUT_GATEWAY_TYPES = {7, 8}
 
@@ -143,6 +153,12 @@ EPAYS_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 # The default validity of a payment link, in minutes.
 DEFAULT_LINK_EXPIRY_MINUTES = 60
 
+# An exchange rate older than this may no longer be right: the provider form says so.
+RATE_STALE_AFTER = timedelta(days=7)
+
+# The description and the texts of the order lines sent to ePays are limited to this length.
+TEXT_MAX_LENGTH = 255
+
 # The size of the ePays custom field columns used by the addon (`udf2` and `udf3` are varchar(255)).
 UDF_MAX_LENGTH = 255
 UDF_LIST_SEPARATOR = ', '
@@ -153,21 +169,24 @@ UDF_ELLIPSIS = '…'
 REUSE_MIN_REMAINING_VALIDITY = timedelta(minutes=5)
 
 # The polling cron picks transactions from the minimum age, and still open ones up to the maximum: a
-# declined or cancelled one has its own limit, the expiry of its link or `LATE_CHARGE_WINDOW`.
+# declined one has its own limit, the expiry of its link, and a cancelled one `epays_watch_until`.
 CRON_MIN_AGE = timedelta(minutes=5)
 CRON_MAX_AGE = timedelta(days=3)
 # A payment still pending this long after its link expired is voided on ePays.
 CRON_VOID_GRACE_PERIOD = timedelta(minutes=30)
-# ePays cannot stop a customer who is already past its payment page: a payment voided or cancelled
-# during 3-D Secure can still be charged, and ePays then reports it completed. Its status is the
-# truth, so a cancelled transaction keeps being read for this long.
+# ePays cannot always stop a customer who is already past its payment page: a payment voided or
+# cancelled while it reaches the bank can still be charged, and ePays then reports it completed,
+# and a server without `inFlight` does so for one voided during 3-D Secure too. Its status is the
+# truth, so a cancelled transaction keeps being read for this long, or until its link would have
+# expired if that is later, and for `CRON_MAX_AGE` from then if it was with the gateway. ePays's
+# notification is answered at any age.
 LATE_CHARGE_WINDOW = timedelta(hours=2)
-# ePays can also correct a payment days later and send its notification again, which Odoo answers
-# by reading the payment, for this long. The cron does not look that far back on its own.
-LATE_NOTIFICATION_WINDOW = timedelta(days=30)
-# The seconds between two reads of a cancelled transaction's payment for the public return route,
-# after one that found it not charged.
-LATE_NOTIFICATION_MIN_INTERVAL = 60
+# Public routes may make Odoo call ePays: at most this many reads of a payment in this many seconds,
+# so that a script cannot keep Odoo's workers and ePays's rate limit busy.
+FETCH_LIMIT = 5
+FETCH_LIMIT_WINDOW = 60
+# What ePays accepts as a payment id: anything else in a public request is not one of its payments.
+PAYMENT_ID_PATTERN = r'^[A-Za-z0-9_-]{1,64}$'
 # A payment request ePays answered too late may still have created the payment: the scheduled check
 # voids it once no click can still be waiting for it, and gives up after the maximum age.
 UNANSWERED_REQUEST_MIN_AGE = timedelta(minutes=2)

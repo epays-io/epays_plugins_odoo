@@ -2,14 +2,17 @@
 
 import ipaddress
 import logging
+import os
 import pprint
 import re
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 import requests
 
 from odoo import Command, _, api, fields, models, release
 from odoo.exceptions import AccessError, ValidationError
+from odoo.http import request
+from odoo.tools import config
 
 from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment.const import REPORT_REASONS_MAPPING
@@ -21,6 +24,9 @@ _logger = logging.getLogger(__name__)
 
 # Whitespace and control characters: never part of a credential, and invalid in an HTTP header.
 _INVALID_CREDENTIAL = re.compile(r'[\s\x00-\x1f\x7f]')
+
+# A request from these hosts stays on the machine, as WordPress's `local` environment does.
+LOCAL_HOSTS = ('localhost', '127.0.0.1')
 
 
 class PaymentProvider(models.Model):
@@ -110,6 +116,12 @@ class PaymentProvider(models.Model):
         help="Send the customer's name, email, phone and address to ePays.",
         default=True,
     )
+    epays_warnings = fields.Text(
+        string="ePays Warnings",
+        help="What the administrator should know about this provider now.",
+        compute='_compute_epays_warnings',
+        groups='base.group_system',
+    )
     epays_gateway_ids = fields.One2many(
         string="ePays Gateways",
         help="The gateways the merchant subscribed to on ePays, as last synced.",
@@ -149,6 +161,65 @@ class PaymentProvider(models.Model):
         elif self.state == 'test' and self.epays_mode == 'production':
             self.epays_mode = 'sandbox'
 
+    def _compute_epays_warnings(self):
+        for provider in self:
+            provider.epays_warnings = '\n'.join(provider._epays_get_warnings()) or False
+
+    def _epays_get_warnings(self):
+        """ Return the warnings that apply now, once the provider is in use.
+
+        Note: self.ensure_one()
+
+        :return: The warnings.
+        :rtype: list[str]
+        """
+        self.ensure_one()
+        if self.code != 'epays' or self.state == 'disabled':
+            return []
+        warnings = []
+        if any(self.sudo()._epays_read_secret(name) is None for name in const.SECRET_FIELDS):
+            warnings.append(_(
+                "A stored master key can no longer be read, because the encryption key changed. "
+                "Enter it again."
+            ))
+        if self.state == 'test' and self.is_published and self.epays_mode == 'sandbox':
+            warnings.append(_(
+                "Sandbox mode is shown to customers: orders paid with test payments are being "
+                "confirmed."
+            ))
+        company = self.company_id
+        currency = company.currency_id
+        if not self._epays_can_convert(currency, company):
+            warnings.append(_(
+                "ePays charges in %(charged)s and no exchange rate from %(currency)s is known, so "
+                "ePays is not offered.", charged=const.CHARGE_CURRENCY, currency=currency.name,
+            ))
+        elif self._epays_has_stale_rate(company):
+            warnings.append(_(
+                "The exchange rate to %(charged)s is more than a week old. It is still used: "
+                "update it if it changed.", charged=const.CHARGE_CURRENCY,
+            ))
+        return warnings
+
+    @api.model
+    def _epays_has_stale_rate(self, company):
+        """ Return whether the rate that converts the company's currency is too old.
+
+        :param res.company company: The company.
+        :return: Whether the newest rate is older than `const.RATE_STALE_AFTER`.
+        :rtype: bool
+        """
+        charge_currency = self._epays_get_charge_currency()
+        if charge_currency == company.currency_id:
+            return False
+        rate = self.env['res.currency.rate'].sudo().search([
+            ('currency_id', '=', charge_currency.id),
+            ('company_id', 'in', (False, company.root_id.id)),
+        ], order='name desc', limit=1)
+        return bool(rate) and (
+            rate.name < fields.Date.context_today(self) - const.RATE_STALE_AFTER
+        )
+
     #=== CRUD METHODS ===#
 
     @api.model_create_multi
@@ -163,14 +234,81 @@ class PaymentProvider(models.Model):
 
     @api.model
     def _epays_clean_credentials(self, vals):
-        """ Trim pasted credentials, and ignore a secret written back as its mask: a client that
-        read the record and saves it whole must not replace the key with the mask. """
+        """ Trim pasted credentials, ignore a secret written back as its mask, as a client that read
+        the record and saves it whole must not replace the key with the mask, and encrypt the
+        others: the database only ever holds ciphertext. """
         for field_name in const.CREDENTIAL_FIELDS:
             value = vals.get(field_name)
             if field_name in const.SECRET_FIELDS and value == const.SECRET_MASK:
                 del vals[field_name]
             elif isinstance(value, str):
                 vals[field_name] = value.strip() or False
+                if vals[field_name] and field_name in const.SECRET_FIELDS:
+                    self._epays_check_credential_format(field_name, vals[field_name])
+                    self._epays_check_secret_transport(vals)
+                    vals[field_name] = epays_utils.encrypt_secret(
+                        vals[field_name], self._epays_get_key_material()
+                    )
+
+    @api.model
+    def _epays_check_credential_format(self, field_name, value):
+        """ A space or a line break in a credential makes every request fail, and `requests`
+        repeats an invalid header value in its error message; the value is refused here instead.
+        The message names the field, never its value.
+
+        :param str field_name: The name of the credential field.
+        :param str value: Its value, not encrypted.
+        :raise ValidationError: If the value is malformed.
+        """
+        if _INVALID_CREDENTIAL.search(value) or value == const.SECRET_MASK:
+            raise ValidationError(_(
+                "The %s contains spaces or line breaks. Copy it again from ePays.",
+                self._fields[field_name].string,
+            ))
+
+    def _epays_check_secret_transport(self, vals):
+        """ Refuse a master key sent over plain HTTP: it just crossed the network in clear, and an
+        administrator should replace it rather than store it.
+
+        :param dict vals: The values being written.
+        :raise ValidationError: If the request is not over https, outside of a local server.
+        """
+        if not request or 'localhost' in (vals.get('epays_mode'), *self.mapped('epays_mode')):
+            return
+        http_request = request.httprequest
+        if http_request.scheme == 'https' or http_request.host.split(':')[0] in LOCAL_HOSTS \
+                or http_request.headers.get('X-Forwarded-Proto') == 'https':
+            return
+        raise ValidationError(_(
+            "A master key can only be saved over HTTPS: it would cross the network in clear. Open "
+            "this page with https:// and save it again."
+        ))
+
+    @api.model
+    def _epays_get_key_material(self):
+        """ Return the secret the master keys are encrypted with.
+
+        :return: The encryption key configured on the server, else the database secret.
+        :rtype: str
+        """
+        return (
+            config.get(const.ENCRYPTION_KEY_OPTION)
+            or os.environ.get(const.ENCRYPTION_KEY_VARIABLE)
+            or self.env['ir.config_parameter'].sudo().get_param('database.secret')
+        )
+
+    def _epays_read_secret(self, field_name):
+        """ Return a master key of the provider, decrypted.
+
+        Note: self.ensure_one()
+
+        :param str field_name: The name of the secret field.
+        :return: The master key, an empty string if none is stored, or `None` if it cannot be
+                 decrypted, as the encryption key changed.
+        :rtype: str|None
+        """
+        self.ensure_one()
+        return epays_utils.decrypt_secret(self[field_name] or '', self._epays_get_key_material())
 
     #=== SECRETS: NEVER READ, SEARCHED, GROUPED OR SORTED ===#
 
@@ -222,17 +360,14 @@ class PaymentProvider(models.Model):
 
     @api.constrains(*const.CREDENTIAL_FIELDS)
     def _check_epays_credentials_format(self):
-        """ A space or a line break in a credential makes every request fail, and `requests`
-        repeats an invalid header value in its error message; the value is refused here instead.
-        The message names the field, never its value. """
+        """ See `_epays_check_credential_format`: for the values not written through the ORM's
+        `create` and `write` paths of this model, e.g. by a data file. """
         for provider in self.sudo().filtered(lambda p: p.code == 'epays'):
             for field_name in const.CREDENTIAL_FIELDS:
                 value = provider[field_name]
-                if value and (_INVALID_CREDENTIAL.search(value) or value == const.SECRET_MASK):
-                    raise ValidationError(_(
-                        "The %s contains spaces or line breaks. Copy it again from ePays.",
-                        provider._fields[field_name].string,
-                    ))
+                # A master key is encrypted once checked: see `_epays_clean_credentials`.
+                if value and not epays_utils.is_encrypted(value):
+                    provider._epays_check_credential_format(field_name, value)
 
     @api.constrains('state', 'epays_mode')
     def _check_epays_mode_when_enabled(self):
@@ -424,7 +559,8 @@ class PaymentProvider(models.Model):
         """ Return the API ID and master key to use in the given environment.
 
         Outside production, the sandbox pair is used when both of its fields are filled;
-        otherwise, the production pair is used.
+        otherwise, the production pair is used. A master key that cannot be read is no key: the
+        request fails, rather than falling back on another key.
 
         Note: self.ensure_one()
 
@@ -434,10 +570,17 @@ class PaymentProvider(models.Model):
         """
         self.ensure_one()
         provider = self.sudo()
+        api_id, field_name = provider.epays_api_id, 'epays_master_key'
         if environment != 'production' and provider.epays_sandbox_api_id \
                 and provider.epays_sandbox_master_key:
-            return provider.epays_sandbox_api_id.strip(), provider.epays_sandbox_master_key.strip()
-        return (provider.epays_api_id or '').strip(), (provider.epays_master_key or '').strip()
+            api_id, field_name = provider.epays_sandbox_api_id, 'epays_sandbox_master_key'
+        master_key = provider._epays_read_secret(field_name)
+        if master_key is None:
+            _logger.warning(
+                "the %s of provider %s can no longer be decrypted; enter it again", field_name,
+                provider.id,
+            )
+        return (api_id or '').strip(), (master_key or '').strip()
 
     def _epays_get_merchant_domain(self):
         """ Return the merchant domain to authenticate with.
@@ -769,16 +912,12 @@ class PaymentProvider(models.Model):
                 title, _("The API ID and the API master key are required."), 'warning'
             )
         try:
-            data = self._epays_make_request(
-                'GET', const.GATEWAYS_PATH, environment=environment, domain=domain
-            )
+            gateways = self._epays_fetch_gateways(environment, domain)
         except EpaysApiError as error:
             return self._epays_notification(
                 title, self._epays_diagnose_error(error, domain), 'warning'
             )
 
-        gateways = data.get('gateways')
-        gateways = gateways if isinstance(gateways, list) else []
         if gateways and not any(self._epays_get_gateway_ref(gateway) for gateway in gateways):
             # Gateways listed in names this version cannot read: syncing would drop every row, and
             # with them the payment methods offered at checkout.
@@ -799,6 +938,32 @@ class PaymentProvider(models.Model):
               found=found, mapped=mapped),
             'success',
         )
+
+    def _epays_fetch_gateways(self, environment, domain):
+        """ Return the merchant's gateways on ePays, following its pages.
+
+        Note: self.ensure_one()
+
+        :param str environment: `production`, `sandbox` or `localhost`.
+        :param str domain: The merchant domain.
+        :return: The gateways.
+        :rtype: list
+        :raise EpaysApiError: If a request fails.
+        """
+        self.ensure_one()
+        gateways = []
+        query = {'limit': const.GATEWAY_SYNC_PAGE_SIZE}
+        for _page in range(const.GATEWAY_SYNC_MAX_PAGES):
+            data = self._epays_make_request(
+                'GET', f'{const.GATEWAYS_PATH}?{urlencode(query)}',
+                environment=environment, domain=domain,
+            )
+            page = data.get('gateways')
+            gateways.extend(page if isinstance(page, list) else [])
+            query['cursor'] = data.get('nextCursor')
+            if not query['cursor'] or not isinstance(query['cursor'], str):
+                break
+        return gateways
 
     @api.model
     def _epays_get_gateway_ref(self, gateway):

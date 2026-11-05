@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0-20260908\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-04 17:00+0000\n"
-"PO-Revision-Date: 2026-11-04 17:00+0000\n"
+"POT-Creation-Date: 2026-11-05 06:23+0000\n"
+"PO-Revision-Date: 2026-11-05 06:23+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -47,6 +47,22 @@ msgid ""
 msgstr ""
 
 #. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"A master key can only be saved over HTTPS: it would cross the network in "
+"clear. Open this page with https:// and save it again."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"A stored master key can no longer be read, because the encryption key "
+"changed. Enter it again."
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_api_id
 msgid "API ID"
 msgstr ""
@@ -64,6 +80,18 @@ msgstr ""
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__is_active
 msgid "Active on ePays"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_transaction_form
+msgid "Allow a New Payment"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_transaction_form
+msgid ""
+"Allow new payments on these documents? Refund the charge on ePays first if "
+"it is not needed."
 msgstr ""
 
 #. module: payment_epays
@@ -135,6 +163,16 @@ msgstr ""
 #. module: payment_epays
 #: model:payment.method,name:payment_epays.payment_method_epays_card
 msgid "Card"
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_transaction_form
+msgid "Check ePays Status"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_watch_until
+msgid "Checked Until"
 msgstr ""
 
 #. module: payment_epays
@@ -277,6 +315,12 @@ msgid "ID"
 msgstr ""
 
 #. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Invoice %s"
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_udf3
 msgid "Invoices Sent (udf3)"
 msgstr ""
@@ -336,6 +380,11 @@ msgid "Merchant Domain"
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_review_needed
+msgid "Merchant Review Needed"
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_mode
 msgid "Mode"
 msgstr ""
@@ -344,6 +393,12 @@ msgstr ""
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "No transaction found matching payment id %s."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Order %s"
 msgstr ""
 
 #. module: payment_epays
@@ -502,6 +557,14 @@ msgid "Sandbox API Master Key"
 msgstr ""
 
 #. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"Sandbox mode is shown to customers: orders paid with test payments are being"
+" confirmed."
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_send_customer_details
 msgid "Send Customer Details"
 msgstr ""
@@ -583,6 +646,13 @@ msgid ""
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_at_bank
+msgid ""
+"The customer submitted the payment and the gateway has not answered yet, so "
+"it can still take the money, even if the payment is voided."
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_merchant_domain
 msgid ""
 "The domain registered on the ePays licence. Leave empty to use the domain of"
@@ -617,6 +687,14 @@ msgid ""
 " is the only mode allowed when the provider is Enabled. Sandbox and "
 "Localhost (an ePays API running on this server, for development) send test "
 "payments with the sandbox credentials."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"The exchange rate to %(charged)s is more than a week old. It is still used: "
+"update it if it changed."
 msgstr ""
 
 #. module: payment_epays
@@ -682,6 +760,13 @@ msgid ""
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_watch_until
+msgid ""
+"The scheduled check reads this cancelled payment until then, as ePays can "
+"still charge it."
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_provider__code
 msgid "The technical code of this payment provider."
 msgstr ""
@@ -742,6 +827,12 @@ msgstr ""
 #. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Transaction %(reference)s: %(state)s."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "Transaction ID"
 msgstr ""
 
@@ -765,9 +856,24 @@ msgid ""
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_warnings
+msgid "What the administrator should know about this provider now."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_at_bank
+msgid "With the Gateway"
+msgstr ""
+
+#. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "You can try again or choose another payment method."
+msgstr ""
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.state_header
+msgid "Your bank is still confirming this payment."
 msgstr ""
 
 #. module: payment_epays
@@ -823,6 +929,15 @@ msgstr ""
 msgid ""
 "Your payment was refunded, so your order was not confirmed. Please contact "
 "us, quoting the reference %s."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
+"Your previous payment for this order is still being confirmed. If you "
+"completed it, your order will update by itself, so please do not pay again. "
+"If you did not, you can try again in a few minutes."
 msgstr ""
 
 #. module: payment_epays
@@ -893,6 +1008,11 @@ msgid "ePays Unanswered Payment Request"
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_warnings
+msgid "ePays Warnings"
+msgstr ""
+
+#. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid "ePays answered with HTTP %(status)s %(code)s %(message)s"
@@ -902,8 +1022,9 @@ msgstr ""
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid ""
-"ePays charged %(charged)s for transaction %(reference)s, more than the "
-"%(due)s left to pay on these documents: refund the difference on ePays."
+"ePays charged the customer for payment %(payment)s (transaction "
+"%(reference)s) although these documents were already paid or cancelled. Odoo"
+" did not record it: refund it on ePays."
 msgstr ""
 
 #. module: payment_epays
@@ -911,8 +1032,17 @@ msgstr ""
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid ""
 "ePays charged the customer for payment %(payment)s (transaction "
-"%(reference)s) although these documents were already paid or cancelled. Odoo"
-" did not record it: refund it on ePays."
+"%(reference)s), which does not match these documents. Odoo did not record "
+"it, and takes no new payment on them until the transaction is released: "
+"review them, and refund it on ePays if it is not needed."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"ePays charges in %(charged)s and no exchange rate from %(currency)s is "
+"known, so ePays is not offered."
 msgstr ""
 
 #. module: payment_epays
@@ -941,6 +1071,12 @@ msgstr ""
 
 #. module: payment_epays
 #. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "ePays payment status"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid ""
 "ePays returned gateways in a format this version of the addon cannot read, "
@@ -956,8 +1092,21 @@ msgid ""
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_review_needed
+msgid ""
+"ePays took money that does not match the documents. No new payment can be "
+"made on them until the merchant has reviewed it."
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.actions.server,name:payment_epays.cron_epays_poll_pending_ir_actions_server
 msgid "ePays: check pending payments"
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "ePays: review transaction %s"
 msgstr ""
 
 #. module: payment_epays

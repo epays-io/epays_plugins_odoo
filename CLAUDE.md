@@ -52,15 +52,17 @@ early for other providers.
 - **`models/payment_transaction.py`** — the flow:
   1. `_get_specific_rendering_values` POSTs `/api/v2/Payments` (with an idempotency key), stores
      `provider_reference` = ePays `paymentId` plus environment, domain, expiry, charged amount/
-     currency/rate and the `udf2`/`udf3` custom fields, then redirects. It first tries to reuse or
-     retire an earlier pending ePays payment on the same order (one live payment per order).
+     currency/rate and the `udf2`/`udf3` custom fields, then redirects. It first reads every live
+     attempt on the same documents, reuses the newest if it can and voids the others, a declined
+     one too (`_epays_find_live_attempts`: one live payment per order).
   2. ePays returns to `/payment/epays/return[/<environment>]?paymentId=…` (controller). The
      transaction is found **only by stored paymentId (+ environment)**, never by data from the
      notification, and the status is always pulled with `GET /api/v2/Payments/{id}`.
   3. `_epays_apply_payment_details` maps status via `const.PAYMENT_STATUS_MAPPING`; `done` requires
      amount/currency/udf fields to match (`_epays_get_mismatches`), otherwise error.
   4. `_cron_epays_poll_pending` (`data/ir_cron.xml`) polls pending transactions in an age window and
-     voids expired links on ePays.
+     voids expired links on ePays, and the links of cancelled documents: this addon depends on
+     `payment` alone and cannot extend the cancellation of an order.
   5. A payment request that times out (`const.PAYMENT_REQUEST_TIMEOUT`) is rolled back, but ePays
      may still create the payment. `payment.epays.unanswered.request` records it in its own cursor
      (it must survive the rollback), and the cron voids the order's pending payments that no
@@ -81,25 +83,43 @@ early for other providers.
      Odoo's state and `is_post_processed` prevent double processing.
      With `account_payment` installed, Odoo's `PaymentCommon` stubs its `_post_process`, cutting the
      ePays override out too: `EpaysAccountingTest` tests it for real.
-  7. **ePays is the source of truth, not Odoo's `cancel`.** ePays cannot refuse a charge once the
-     customer is past its page: a payment voided during 3-D Secure is still charged and turns
-     `completed`. So a cancelled transaction is read by the cron for `const.LATE_CHARGE_WINDOW`, and
-     by the return route for `const.LATE_NOTIFICATION_WINDOW` (not again for
-     `const.LATE_NOTIFICATION_MIN_INTERVAL`, per process, once a read found no charge; a failed or
-     retried read does not count, as ePays notifies once), as ePays can correct a payment days
+  7. **ePays is the source of truth, not Odoo's `cancel`.** A server without `inFlight` cannot
+     refuse a charge once the customer is past its page: a payment voided during 3-D Secure is still
+     charged and turns `completed`. A server with it withholds that charge, but one that lost the
+     race to a void still completes (`lateCapture`).
+     So `_set_canceled` sets `epays_watch_until` (`_epays_get_watch_limit`), which the
+     cron reads to, and the return route reads it at any age, as ePays can correct a payment days
      later and resend its notification (`POST /api/v2/Payments/{id}/notify-deliveries`; correct the
-     status first, Odoo reads it). See `_epays_may_be_charged`: not when a newer transaction took
-     the payment over. Only a `done` target moves it (`_set_done`/`_set_error` with `cancel`
-     allowed). `_epays_complete` locks the documents' transactions, then asks the accounting what
-     is due (`_epays_get_amount_due`: residuals and Odoo's paid transactions, not a sum of
-     attempts; a cancelled document is owed nothing). Nothing due: refused with response code `00`,
-     noted on the documents and left for a refund on ePays. Something due, even less than the
-     charge: done, and an overpayment is noted. A second transaction holding the same ePays payment
+     status first, Odoo reads it). Public reads are limited (`const.FETCH_LIMIT`, per process; only
+     an applied read counts, as ePays's notification may be the only one, and a read that cannot
+     run hands the transaction back to the cron, `_epays_watch_again`). `_epays_owns_payment`: not
+     when a newer transaction took the payment over. Only a `done` target moves it
+     (`_set_done`/`_set_error` with `cancel` allowed). `_epays_complete` locks the documents'
+     transactions, then asks the accounting what is due (`_epays_get_amount_due`: residuals and
+     Odoo's paid transactions, not a sum of attempts; a cancelled document is owed nothing). Nothing
+     due: refused with response code `00`, noted on the documents, emailed to the company
+     (`_epays_alert_merchant`) and left for a refund on ePays. A charge above what is due, or a late
+     one that is not what a new payment would charge now, is held (`_epays_hold_payment`,
+     `epays_review_needed`): the other attempts are stopped and no new payment is taken until the
+     merchant clicks *Allow a New Payment*. A second transaction holding the same ePays payment
      (`_epays_get_payment_holders`) is one charge, not a refusal. A done payment voids the other
      attempts no longer needed on its documents (`_epays_void_other_attempts`, declined ones too:
      ePays lets them retry on the same link). `poll_status` and `_get_last` follow the transaction
      that paid, so a customer who paid never waits on, or reads about, a replacement that was
      voided; a refused charge is the exception, shown even when it is the older transaction.
+  8. **A payment with the gateway is not voided** (`epays_utils.is_at_bank`: `inFlight`, on a
+     server that sends it, also on a declined payment, as ePays lets its customer pay again on the
+     link; or pending with a `transactionId`, which stays empty in the BenefitPay wallet). The
+     bank's answer can arrive after
+     the void and take the money. `_epays_check_replaced_payments` reads the replaced attempts
+     before anything is voided, as raising rolls the request back but not a void; the customer is
+     asked to wait (`_epays_raise_still_confirming`), and the status page keeps waiting
+     (`poll_status`, and the `state_header` template). Only the expiry void and cancelled documents
+     void it. A server with `inFlight` refuses such a void with HTTP 409 `PAYMENT_IN_FLIGHT`: nothing
+     reads the code, as a refused void always re-reads the payment. `_epays_void_other_attempts`
+     runs once, so the cron voids what it left open (`_epays_is_left_open`), and a refused orphan
+     keeps its `payment.epays.unanswered.request`. On a server without `inFlight`, a payment voided
+     during 3-D Secure has no `transactionId` and cannot be told apart.
 - **Currency**: ePays only charges `BHD` (`const.CHARGE_CURRENCY`); other currencies are converted
   with Odoo rates at initiation and the conversion recorded on the transaction.
 - **Payment methods** (`data/payment_method_data.xml`, `models/payment_method.py`): one generic
@@ -134,6 +154,10 @@ early for other providers.
 - **Master keys never reach the browser**: reads return `const.SECRET_MASK`, writing the mask back
   keeps the stored value, and `_read_format` / `_search` / `_read_group` overrides refuse secret
   fields. Keep secrets out of logs (`_redact`).
+- **Master keys are encrypted in their columns** (`const.SECRET_PREFIX`, `_epays_clean_credentials`):
+  read them with `_epays_read_secret`, never as field values. The key is `epays_encryption_key` in
+  `odoo.conf` or `EPAYS_ENCRYPTION_KEY`, else `database.secret`. An unreadable key is no key: it must
+  not fall back on another one.
 - Test + Localhost + Published is refused by a constraint; Localhost mode is for a local ePays API.
 - Bump `version` in `__manifest__.py` for any release installed databases must pick up, and put data
   changes for existing databases in `payment_epays/migrations/<version>/`; migrations only undo
@@ -143,3 +167,60 @@ early for other providers.
   value must be added there (`test_neutralize_clears_the_keys`).
 - Match the existing style: files start with the `# Part of ePays Payment Provider…` header;
   docstrings in Odoo's `""" … """` style with `:param:` / `:return:`; comments explain *why*.
+
+## Parity with the WooCommerce plugin
+
+This addon and `epays-woocommerce` are one integration on two platforms. A change to shared payment logic
+is made in both, with a test named after its scenario in both. Refunds are out of scope for both.
+
+| # | Scenario | Expected in both |
+|---|---|---|
+| S1 | Retry while the current payment is at the bank and its link is live | Not voided, no new payment, "still being confirmed" |
+| S2 | Retry while a replaced payment is at the bank | Same, and nothing is voided first |
+| S3 | Retry when a replaced payment has completed | No new payment; the order is settled |
+| S4 | Retry after a decline | Declined link voided before the new payment |
+| S5 | Retry with under 5 minutes left on the link | Old link voided, new payment created |
+| S6 | Void refused on retry | Re-read; no second payment unless it turned out paid |
+| S7 | Another payment settles the order | Other attempts voided, except any at the bank; the scheduler voids what stays open, until the watch ends |
+| S8 | Order or document cancelled with an open link | Link voided on ePays, even at the bank |
+| S9 | Replaced payment watched by the scheduler | Until `max(link expiry + 30 min, replaced + 2 h)`; `max(link expiry, replaced) + 3 days` at the bank, also when found there later |
+| S10 | Callback for a replaced payment | Read at any age; a read that is limited or fails goes back to the scheduler |
+| S11 | Late charge that matches what is due now | Order paid with it; other payment voided |
+| S12 | Late charge that does not match what is due now | Nothing recorded, other attempts stopped, new payments blocked until released; merchant told by note, log and email; customer told |
+| S13 | Second charge on a paid order | Nothing recorded; merchant told by note, log and email; customer told |
+| S14 | Current payment mismatch | Not paid, customer told to contact the shop, merchant told by note, log and email, new payments blocked until released |
+| S15 | Order total changed after the payment was created | A charge above what is due is refused as in S12 |
+| S16 | Acknowledgement | Completed, and declined, cancelled or voided with no money taken: acknowledged. Refused or refunded: not |
+| S17 | Public routes | At most 5 ePays reads a minute per payment attempt; the scheduler and admin action are exempt; malformed ids rejected without a lookup |
+| S18 | Waiting page | Each poll reads ePays within the limit; a customer whose replaced payment is at the bank keeps waiting |
+| S19 | Admin status check | Reads the current and all replaced payments, at any age |
+| S20 | Request content | Same fields; `order` only when lines add up to the fils; description "Order N" in the payment language |
+| S21 | Master key handling | Encrypted with prefix `epays1:`; refused over plain HTTP; an unreadable key warns the admin and never falls back to another key |
+| S22 | Admin warnings | Unreadable key, sandbox shown to customers, no exchange rate, rates over 7 days old |
+| S23 | Gateway sync | Follows `nextCursor`, up to 10 pages |
+| S24 | Void refused while the customer may be paying | Not reported as a connection failure, no second payment, void retried once ePays allows it |
+
+**The one intentional difference in logic:** a late charge on a cancelled order. WooCommerce restores
+the order; Odoo refuses the charge and leaves a refund, as reopening a cancelled Odoo order can have
+undone pickings and invoices.
+
+**Platform differences, same intent:**
+
+- S3: Odoo settles on the next cron run, as raising rolls the request back and a second cursor can
+  deadlock. S8: Odoo voids on the next cron run, as it depends on `payment` alone: within 15
+  minutes, or 20 for a payment under 5 minutes old (`CRON_MIN_AGE`).
+- S15 below what is due: Odoo keeps a partial payment, unconfirmed; WooCommerce has none and holds the
+  order. Only a late payment can be told apart from an intended partial one.
+- S12, S14: WooCommerce holds an order with On hold or Failed and the *Allow a new ePays payment*
+  action; Odoo has no such state, so `epays_review_needed` and *Allow a New Payment* do it.
+- S17: the limit is per transaction and per Odoo process; WooCommerce shares one limit between
+  an order's attempts and its workers, and is the stricter. A limited read goes back to the
+  scheduler in both. Odoo counts a read once it is applied, WooCommerce when it starts.
+- S24: WooCommerce tells a customer back from a replaced payment that no money was taken, on the
+  order-pay page. Odoo's session follows the replacement, so that customer never reads it there.
+- WooCommerce only: retiring the links of the customer's other orders (Odoo keeps one cart order);
+  credentials in `wp-config.php` (Odoo providers are per company); the Localhost redirect exception;
+  Classic and Blocks; multi-currency adapters; the privacy eraser; the hold-stock guard; a
+  cancelled order's thank-you text (Odoo's status page shows the payment as cancelled).
+- Odoo only: the merchant domain as a setting (several websites); multi-document `udf2`/`udf3`;
+  orphan cleanup limited to orders (ePays lists by `udf2`); multi-company; neutralize.

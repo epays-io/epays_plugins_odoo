@@ -72,14 +72,28 @@ class EpaysPostProcessing(PaymentPostProcessing):
         the one voided for it, charged after all: the page then follows the payment that counts.
         A charge Odoo refused is not pointless: that customer must read about it, on the
         confirmation page, as the payment step of a paid or cancelled order has nothing to show.
+
+        ePays is read for a customer still waiting, within the limit of the public routes: its
+        notification can be missed, and the scheduled check takes minutes.
         """
         monitored_tx = self._get_monitored_transaction()
+        is_at_bank = False
+        if monitored_tx.provider_code == 'epays' and monitored_tx.provider_reference:
+            is_at_bank = monitored_tx.state == 'cancel' and monitored_tx.epays_at_bank \
+                and monitored_tx._epays_owns_payment()
+            if monitored_tx.state in ('draft', 'pending') or is_at_bank:
+                monitored_tx._epays_refresh_for_status_page()
+                is_at_bank = is_at_bank and monitored_tx.state == 'cancel' \
+                    and monitored_tx.epays_at_bank
         if monitored_tx.provider_code == 'epays' and monitored_tx.state != 'done' \
                 and not monitored_tx._epays_is_refused():
             paying_txs = monitored_tx._epays_get_paying_transactions()
             if paying_txs:
                 self.monitor_transaction(paying_txs[:1])
         values = super().poll_status(**kwargs)
+        if is_at_bank and values.get('state') == 'cancel':
+            # The bank can still take the money: that customer waits for its answer.
+            values['state'] = 'pending'
         is_shop_failure = (
             values.get('provider_code') == 'epays'
             and values.get('state') in ('error', 'cancel')

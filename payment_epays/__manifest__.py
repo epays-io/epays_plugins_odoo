@@ -2,7 +2,7 @@
 
 {
     'name': 'ePays Payment Provider',
-    'version': '18.0.1.0.6',
+    'version': '18.0.1.0.7',
     'category': 'Accounting/Payment Providers',
     'sequence': 350,
     'summary': "Cards, Benefit, BenefitPay, Apple Pay, Google Pay, Samsung Pay and Tabby through "
@@ -11,6 +11,7 @@
     'website': 'https://epays.io',
     'support': 'info@epays.io',
     'depends': ['payment'],
+    'external_dependencies': {'python': ['cryptography']},
     'data': [
         'security/ir.model.access.csv',
         'security/ir_rules.xml',

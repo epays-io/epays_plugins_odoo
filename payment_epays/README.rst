@@ -300,7 +300,7 @@ Several companies
 
 Scheduled action
     *ePays: check pending payments* runs every 15 minutes (Settings > Technical > Scheduled
-    Actions). Keep it active: ePays notifies Odoo only once, so the action completes payments
+    Actions). Keep it active: ePays's notification can be missed, so the action completes payments
     whose customer closed the browser, voids expired unpaid payment links, and finishes the Odoo
     post-processing of ePays payments even when no provider is enabled any more. It also voids the
     payment ePays may create for a request it answered too late (Odoo waits 30 seconds when it
@@ -363,9 +363,14 @@ link is still valid for more than five minutes and it is in the same mode:
   paid."; the earlier transaction is completed by its return, the ePays notification or the
   scheduled action;
 * a status Odoo does not recognise (it may be a gateway's own word for a completed payment):
-  handled like a pending payment that cannot be reused. Odoo voids it first (ePays voids only a
-  pending payment, never a paid one) and creates a new payment only if the void succeeds;
-* failed, cancelled or expired: the earlier transaction is updated and a new payment is created.
+  handled like a pending payment that cannot be reused. Odoo voids it first (ePays never voids a
+  paid payment) and creates a new payment only if the void succeeds;
+* declined: voided first, as ePays keeps a declined link payable, then a new payment is created;
+* with the gateway (the customer submitted it and the bank has not answered): no new payment, and
+  the customer is asked not to pay again if they completed it, or to try again in a few minutes, as
+  a void would not stop the bank. A void ePays refuses because the customer may be paying is
+  handled the same way, and tried again by the scheduled check;
+* cancelled or expired: the earlier transaction is updated and a new payment is created.
 
 If ePays cannot be reached during this check, the customer sees the generic error rather than
 getting a second payable link. Payments without sales order or invoice (a bare payment link) are
@@ -411,14 +416,22 @@ What the addon does:
   took but Odoo refused (wrong amount or order, refunded, a second payment) is left unacknowledged,
   so that it stays in ePays's list of payments to check. An ePays server without acknowledgements
   yet only gets a line in the server log.
-* ePays's status is the reference. A customer already past the ePays page, e.g. on 3-D Secure, can
-  still be charged for a payment Odoo voided or cancelled, so Odoo keeps checking a cancelled payment
-  for two hours. ePays can also correct a payment later and send its notification again: Odoo reads
-  a cancelled payment each time it is notified, for 30 days. If it was charged, it pays the order and
-  the other payment still open on that order is voided. If the order or invoice was already paid,
-  in any way, or was cancelled, Odoo does not record the charge: it tells the customer, notes it on
-  the document and leaves it on ePays to refund. A charge above what is left to pay is recorded,
-  with a note about the difference to refund.
+* ePays's status is the reference. A customer already past the ePays page can still be charged for
+  a payment Odoo voided or cancelled, so Odoo keeps checking a cancelled payment
+  for two hours, or until its link would have expired if that is later, and for three days if it was
+  with the gateway. ePays can also correct a payment later and send its notification again: Odoo
+  reads a cancelled payment each time it is notified, at any age, and **Check ePays Status** on the
+  transaction reads it on demand. If it was charged and matches what the order would charge now, it
+  pays the order and the other payment still open on that order is voided. If the order or invoice
+  was already paid, in any way, or was cancelled, Odoo does not record the charge: it tells the
+  customer, notes it on the document, emails the company and leaves it on ePays to refund.
+* A charge that does not fit (a late one for another amount, or one above what is left to pay) is
+  not recorded either, and holds the order or invoice: the other payments on it are stopped and no
+  new payment is taken until an administrator reviews it and clicks **Allow a New Payment** on the
+  transaction. Odoo emails the company address, so keep it filled in.
+* An order or invoice that is cancelled has its open payment link voided by the scheduled action,
+  within 15 minutes, or 20 for a payment created moments before. If a customer pays in between, the
+  charge is refused as above.
 * Calls to ePays use https with certificate checking, on the fixed server of the chosen mode, and
   never follow a redirect, so the master key is only ever sent to ePays.
 * The API master keys never leave the server. Once saved, a key is shown as ``********`` and is
@@ -426,6 +439,11 @@ What the addon does:
   return it, and it cannot be searched, grouped or sorted on. To change a key, type the new one
   over the mask; saving the form without touching it keeps the stored key. Only Settings
   administrators can set the API IDs and keys.
+* The keys are encrypted in the database and can only be saved over HTTPS. Set your own encryption
+  key with ``epays_encryption_key`` in ``odoo.conf``, or the ``EPAYS_ENCRYPTION_KEY`` environment
+  variable. Without one, Odoo's database secret is used, which is in the same database: only your
+  own key protects them from a full copy of the database. If the key changes, the stored keys can no
+  longer be read: the provider form says so, payments stop, and you enter them again.
 * The keys are never written to the server log or to an error message, even when a request fails.
   A key pasted with a space or a line break inside is refused when saved.
 * The keys are not copied when the provider is duplicated, and are cleared in neutralised copies of

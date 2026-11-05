@@ -1,8 +1,12 @@
 # Part of ePays Payment Provider. See LICENSE file for full copyright and licensing details.
 
+import base64
+import hashlib
 import json
 import re
 from datetime import datetime, timezone
+
+from cryptography.fernet import Fernet, InvalidToken
 
 from odoo.exceptions import ValidationError
 
@@ -81,6 +85,131 @@ def get_payment_state(payment_data):
         if normalized_value in statuses:
             return state, value.strip()
     return None, value.strip()
+
+
+def is_encrypted(value):
+    """ Return whether a stored master key is in the encrypted format. """
+    return isinstance(value, str) and value.startswith(const.SECRET_PREFIX)
+
+
+def _get_cipher(key_material):
+    """ Return the cipher of a secret key material, derived for this one purpose. """
+    digest = hashlib.sha256(f'payment_epays|{key_material}'.encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def encrypt_secret(plain, key_material):
+    """ Encrypt a master key, so that the database only ever holds ciphertext.
+
+    :param str plain: The master key.
+    :param str key_material: The secret the encryption key is derived from.
+    :return: The stored value.
+    :rtype: str
+    """
+    return const.SECRET_PREFIX + _get_cipher(key_material).encrypt(plain.encode()).decode()
+
+
+def decrypt_secret(stored, key_material):
+    """ Decrypt a stored master key.
+
+    A value that is not encrypted was stored before the addon encrypted the keys, and is returned
+    as it is: a failed migration must not stop the payments.
+
+    :param str stored: The stored value.
+    :param str key_material: The secret the encryption key is derived from.
+    :return: The master key, or `None` if it cannot be decrypted (the secret changed).
+    :rtype: str|None
+    """
+    if not is_encrypted(stored):
+        return stored
+    try:
+        token = stored[len(const.SECRET_PREFIX):].encode()
+        return _get_cipher(key_material).decrypt(token).decode()
+    except (InvalidToken, ValueError):
+        return None
+
+
+def _fit_order_lines(items, decimals, per_unit):
+    """ Return the lines of the items, or `None` if a unit price does not divide its total.
+
+    :param list items: The items, see `get_order_lines`.
+    :param int decimals: The decimals of the charged currency.
+    :param bool per_unit: Whether to send the real quantities, or one line per item.
+    :return: The lines, as ePays reads them.
+    :rtype: list[dict]|None
+    """
+    lines = []
+    for item in items:
+        quantity = item['quantity'] if per_unit else 1
+        unit_price, remainder = divmod(item['total'], quantity)
+        if remainder:
+            return None
+        name = item['name']
+        if not per_unit and item['quantity'] != 1:
+            name = f"{name} × {item['quantity']}"
+        line = {
+            'name': name[:const.TEXT_MAX_LENGTH],
+            'quantity': quantity,
+            'unitPrice': format_minor_units(unit_price, decimals),
+        }
+        if item.get('sku'):
+            line['sku'] = item['sku'][:const.TEXT_MAX_LENGTH]
+        lines.append(line)
+    return lines
+
+
+def get_order_lines(items, shipping, charged, decimals):
+    """ Return the order lines to send to ePays, or `None` if they cannot add up to the charge.
+
+    Tabby recomputes what it charges from them: the sum of `unitPrice × quantity` plus
+    `shippingAmount` (tax and discount are not added). So they are sent only when that sum equals
+    the charged amount exactly; otherwise ePays keeps the amount. A line whose total does not divide
+    by its quantity is sent once, with its line total.
+
+    :param list items: The items, as dicts with `name`, `quantity`, `sku` and `total`, their total
+                       in minor units of the charged currency.
+    :param int shipping: The shipping, in minor units.
+    :param int charged: The amount charged, in minor units.
+    :param int decimals: The decimals of the charged currency.
+    :return: The lines, as ePays reads them.
+    :rtype: list[dict]|None
+    """
+    if not items or any(item['total'] < 0 for item in items):
+        return None
+    if shipping + sum(item['total'] for item in items) != charged:
+        return None
+    return _fit_order_lines(items, decimals, True) or _fit_order_lines(items, decimals, False)
+
+
+def to_minor_units(amount, decimals):
+    """ Return an amount in minor units (e.g. fils), which add up exactly, unlike floats. """
+    return round(amount * 10 ** decimals)
+
+
+def format_minor_units(amount, decimals):
+    """ Return minor units as the decimal string ePays reads, e.g. `12.500`. """
+    return f'{amount / 10 ** decimals:.{decimals}f}'
+
+
+def is_at_bank(payment_data):
+    """ Return whether the customer submitted the payment and the gateway has not answered yet.
+
+    ePays reports `inFlight` while it can no longer stop the customer's money, and refuses to void
+    the payment. Older servers do not send it, and set `transactionId` when the customer pays: a
+    void does not stop such a payment, as the bank's answer can still take the money on a voided
+    payment. `transactionId` can stay empty until the gateway answers, e.g. in the BenefitPay
+    wallet, so a payment voided during 3-D Secure cannot be told apart on those servers. A declined
+    payment can be `inFlight` too, as ePays lets its customer pay again on the same link; its
+    `transactionId` is the one of the decline.
+
+    :param dict payment_data: The `data` of the v2 payment details.
+    :return: Whether the customer's money may be moving.
+    :rtype: bool
+    """
+    state = get_payment_state(payment_data)[0]
+    if state == 'pending' and not is_empty(payment_data.get('transactionId')):
+        return True
+    return state in ('pending', 'error') and payment_data.get('inFlight') is True
 
 
 def parse_json(value):

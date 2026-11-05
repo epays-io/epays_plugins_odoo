@@ -23,6 +23,10 @@
                     <field name="epays_mode" widget="radio" required="code == 'epays'"/>
                     <field name="epays_api_url" widget="url"/>
                     <div class="alert alert-warning" role="alert" colspan="2"
+                         invisible="not epays_warnings">
+                        <field name="epays_warnings" readonly="1" nolabel="1"/>
+                    </div>
+                    <div class="alert alert-warning" role="alert" colspan="2"
                          invisible="epays_mode != 'localhost'">
                         Localhost is for development: it reaches an ePays API running on this Odoo
                         server, and the server must trust its certificate.

@@ -6,14 +6,14 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0-20260908\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-15 04:13+0000\n"
+"POT-Creation-Date: 2026-11-05 06:23+0000\n"
 "PO-Revision-Date: 2026-09-26 11:12+0000\n"
 "Last-Translator: \n"
 "Language-Team: Arabic\n"
+"Language: ar\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
-"Language: ar\n"
 "Plural-Forms: nplurals=6; plural=n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 ? 4 : 5;\n"
 
 #. module: payment_epays
@@ -27,7 +27,8 @@ msgstr "%(env)s (%(url)s): %(result)s"
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid ""
 "%(found)s gateways found on ePays, %(mapped)s linked to a payment method."
-msgstr "تم العثور على %(found)s بوابات في ePays، منها %(mapped)s مرتبطة بطريقة دفع."
+msgstr ""
+"تم العثور على %(found)s بوابات في ePays، منها %(mapped)s مرتبطة بطريقة دفع."
 
 #. module: payment_epays
 #. odoo-python
@@ -54,6 +55,25 @@ msgstr ""
 "                        الدفع مع بيانات البطاقة المقنّعة وتفاصيل التفويض، ويتم حفظها في المعاملة."
 
 #. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"A master key can only be saved over HTTPS: it would cross the network in "
+"clear. Open this page with https:// and save it again."
+msgstr ""
+"لا يمكن حفظ المفتاح الرئيسي إلا عبر HTTPS، لأنه سيُنقل عبر الشبكة دون تشفير."
+" افتح هذه الصفحة باستخدام https:// واحفظه مرة أخرى."
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"A stored master key can no longer be read, because the encryption key "
+"changed. Enter it again."
+msgstr ""
+"تعذّرت قراءة مفتاح رئيسي محفوظ بسبب تغيّر مفتاح التشفير. أدخله مرة أخرى."
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_api_id
 msgid "API ID"
 msgstr "معرّف API"
@@ -72,6 +92,20 @@ msgstr "رابط API"
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_gateway__is_active
 msgid "Active on ePays"
 msgstr "نشطة في ePays"
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_transaction_form
+msgid "Allow a New Payment"
+msgstr "السماح بدفعة جديدة"
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_transaction_form
+msgid ""
+"Allow new payments on these documents? Refund the charge on ePays first if "
+"it is not needed."
+msgstr ""
+"هل تريد السماح بدفعات جديدة على هذه المستندات؟ استرد المبلغ من ePays أولًا "
+"إذا لم تكن بحاجة إليه."
 
 #. module: payment_epays
 #. odoo-python
@@ -95,7 +129,9 @@ msgstr "لا يمكن إدراج بوابة ePays إلا مرة واحدة لك�
 msgid ""
 "An ePays provider in Localhost mode cannot be published: customers would be "
 "sent to their own computer. Unpublish it, or set its Mode to Sandbox."
-msgstr "لا يمكن نشر مزود ePays في وضع الخادم المحلي: سيتم توجيه العملاء إلى أجهزتهم الخاصة. ألغِ نشره، أو اضبط الوضع على بيئة الاختبار."
+msgstr ""
+"لا يمكن نشر مزود ePays في وضع الخادم المحلي: سيتم توجيه العملاء إلى أجهزتهم "
+"الخاصة. ألغِ نشره، أو اضبط الوضع على بيئة الاختبار."
 
 #. module: payment_epays
 #. odoo-python
@@ -103,7 +139,9 @@ msgstr "لا يمكن نشر مزود ePays في وضع الخادم المحل�
 msgid ""
 "An enabled ePays provider takes real payments: set its Mode to Production, "
 "or set its state to Test."
-msgstr "مزود ePays المفعّل يستقبل مدفوعات حقيقية: اضبط الوضع على الإنتاج، أو اضبط حالته على الاختبار."
+msgstr ""
+"مزود ePays المفعّل يستقبل مدفوعات حقيقية: اضبط الوضع على الإنتاج، أو اضبط "
+"حالته على الاختبار."
 
 #. module: payment_epays
 #: model:payment.method,name:payment_epays.payment_method_epays_apple_pay
@@ -149,6 +187,16 @@ msgstr "BenefitPay"
 #: model:payment.method,name:payment_epays.payment_method_epays_card
 msgid "Card"
 msgstr "البطاقة"
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.payment_transaction_form
+msgid "Check ePays Status"
+msgstr "التحقق من الحالة في ePays"
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_watch_until
+msgid "Checked Until"
+msgstr "يُتحقق منها حتى"
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_provider__code
@@ -292,6 +340,12 @@ msgid "ID"
 msgstr "المعرّف"
 
 #. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Invoice %s"
+msgstr "الفاتورة %s"
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_udf3
 msgid "Invoices Sent (udf3)"
 msgstr "الفواتير المرسلة (udf3)"
@@ -353,6 +407,11 @@ msgid "Merchant Domain"
 msgstr "نطاق التاجر"
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_review_needed
+msgid "Merchant Review Needed"
+msgstr "تتطلب مراجعة التاجر"
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_mode
 msgid "Mode"
 msgstr "الوضع"
@@ -362,6 +421,12 @@ msgstr "الوضع"
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "No transaction found matching payment id %s."
 msgstr "لم يتم العثور على معاملة تطابق معرّف الدفع %s."
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Order %s"
+msgstr "الطلب %s"
 
 #. module: payment_epays
 #. odoo-python
@@ -519,6 +584,15 @@ msgid "Sandbox API Master Key"
 msgstr "المفتاح الرئيسي لـ API لبيئة الاختبار"
 
 #. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"Sandbox mode is shown to customers: orders paid with test payments are being"
+" confirmed."
+msgstr ""
+"وضع الاختبار ظاهر للعملاء: يجري تأكيد الطلبات المدفوعة بدفعات تجريبية."
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_send_customer_details
 msgid "Send Customer Details"
 msgstr "إرسال بيانات العميل"
@@ -571,21 +645,27 @@ msgstr "معرّف API الخاص بتاجر ePays، ويُستخدم في ال�
 msgid ""
 "The API ID used in Sandbox and Localhost mode. Leave empty to use the "
 "production API ID."
-msgstr "معرّف API المستخدم في وضع بيئة الاختبار والخادم المحلي. اتركه فارغًا لاستخدام معرّف API الخاص بالإنتاج."
+msgstr ""
+"معرّف API المستخدم في وضع بيئة الاختبار والخادم المحلي. اتركه فارغًا "
+"لاستخدام معرّف API الخاص بالإنتاج."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_master_key
 msgid ""
 "The API master key of the ePays merchant, used in production. Once saved, it"
 " is never shown again: enter a new key to replace it."
-msgstr "المفتاح الرئيسي لـ API الخاص بتاجر ePays، المستخدم في الإنتاج. بعد حفظه لا يُعرض مرة أخرى: أدخل مفتاحًا جديدًا لاستبداله."
+msgstr ""
+"المفتاح الرئيسي لـ API الخاص بتاجر ePays، المستخدم في الإنتاج. بعد حفظه لا "
+"يُعرض مرة أخرى: أدخل مفتاحًا جديدًا لاستبداله."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_sandbox_master_key
 msgid ""
 "The API master key used in Sandbox and Localhost mode. Leave empty to use "
 "the production master key. Once saved, it is never shown again."
-msgstr "المفتاح الرئيسي لـ API المستخدم في وضع بيئة الاختبار والخادم المحلي. اتركه فارغًا لاستخدام المفتاح الرئيسي الخاص بالإنتاج. بعد حفظه لا يُعرض مرة أخرى."
+msgstr ""
+"المفتاح الرئيسي لـ API المستخدم في وضع بيئة الاختبار والخادم المحلي. اتركه "
+"فارغًا لاستخدام المفتاح الرئيسي الخاص بالإنتاج. بعد حفظه لا يُعرض مرة أخرى."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_epays_gateway__payment_method_id
@@ -597,14 +677,27 @@ msgstr "طريقة الدفع في Odoo التي تفتح هذه البوابة 
 msgid ""
 "The amount sent to ePays: the transaction's amount, converted with Odoo's "
 "exchange rate when the transaction is in another currency."
-msgstr "المبلغ المرسل إلى ePays: مبلغ المعاملة، محوَّلًا بسعر الصرف في Odoo عندما تكون المعاملة بعملة أخرى."
+msgstr ""
+"المبلغ المرسل إلى ePays: مبلغ المعاملة، محوَّلًا بسعر الصرف في Odoo عندما "
+"تكون المعاملة بعملة أخرى."
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_at_bank
+msgid ""
+"The customer submitted the payment and the gateway has not answered yet, so "
+"it can still take the money, even if the payment is voided."
+msgstr ""
+"أرسل العميل الدفعة ولم ترد البوابة بعد، لذا قد يُخصم المبلغ حتى لو أُلغيت "
+"الدفعة."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_merchant_domain
 msgid ""
 "The domain registered on the ePays licence. Leave empty to use the domain of"
 " the website at payment time."
-msgstr "النطاق المسجّل في ترخيص ePays. اتركه فارغًا لاستخدام نطاق الموقع الإلكتروني وقت الدفع."
+msgstr ""
+"النطاق المسجّل في ترخيص ePays. اتركه فارغًا لاستخدام نطاق الموقع الإلكتروني "
+"وقت الدفع."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_gateway_requested
@@ -612,7 +705,9 @@ msgid ""
 "The ePays gateway the payment page was opened for (merchantGateway), for a "
 "payment method that opens one gateway directly. Empty when the customer "
 "chose on the ePays page."
-msgstr "بوابة ePays التي فُتحت لها صفحة الدفع (merchantGateway)، لطريقة دفع تفتح بوابة واحدة مباشرة. تكون فارغة عندما يختار العميل على صفحة ePays."
+msgstr ""
+"بوابة ePays التي فُتحت لها صفحة الدفع (merchantGateway)، لطريقة دفع تفتح "
+"بوابة واحدة مباشرة. تكون فارغة عندما يختار العميل على صفحة ePays."
 
 #. module: payment_epays
 #. odoo-python
@@ -625,7 +720,9 @@ msgstr "لا يمكن البحث في المفاتيح الرئيسية لـ ePa
 msgid ""
 "The ePays payment page of this transaction, reused if the customer pays the "
 "same order again while the payment is still pending."
-msgstr "صفحة الدفع في ePays لهذه المعاملة، ويُعاد استخدامها إذا دفع العميل الطلب نفسه مرة أخرى بينما لا يزال الدفع معلّقًا."
+msgstr ""
+"صفحة الدفع في ePays لهذه المعاملة، ويُعاد استخدامها إذا دفع العميل الطلب "
+"نفسه مرة أخرى بينما لا يزال الدفع معلّقًا."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_mode
@@ -634,14 +731,30 @@ msgid ""
 " is the only mode allowed when the provider is Enabled. Sandbox and "
 "Localhost (an ePays API running on this server, for development) send test "
 "payments with the sandbox credentials."
-msgstr "خادم ePays الذي يستقبل المدفوعات. يستقبل الإنتاج مدفوعات حقيقية، وهو الوضع الوحيد المسموح به عندما يكون المزود مفعّلًا. أما بيئة الاختبار والخادم المحلي (واجهة ePays تعمل على هذا الخادم، للتطوير) فيرسلان مدفوعات تجريبية ببيانات اعتماد بيئة الاختبار."
+msgstr ""
+"خادم ePays الذي يستقبل المدفوعات. يستقبل الإنتاج مدفوعات حقيقية، وهو الوضع "
+"الوحيد المسموح به عندما يكون المزود مفعّلًا. أما بيئة الاختبار والخادم "
+"المحلي (واجهة ePays تعمل على هذا الخادم، للتطوير) فيرسلان مدفوعات تجريبية "
+"ببيانات اعتماد بيئة الاختبار."
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"The exchange rate to %(charged)s is more than a week old. It is still used: "
+"update it if it changed."
+msgstr ""
+"مضى أكثر من أسبوع على سعر الصرف إلى %(charged)s. وهو ما زال مستخدمًا: حدّثه "
+"إذا تغيّر."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_gateway_response
 msgid ""
 "The gateway response returned by ePays, as JSON. Card data is masked by "
 "ePays."
-msgstr "استجابة البوابة التي أعادتها ePays بصيغة JSON. تقوم ePays بإخفاء بيانات البطاقة."
+msgstr ""
+"استجابة البوابة التي أعادتها ePays بصيغة JSON. تقوم ePays بإخفاء بيانات "
+"البطاقة."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_gateway_ids
@@ -653,21 +766,27 @@ msgstr "البوابات التي اشترك فيها التاجر في ePays، 
 msgid ""
 "The id of the merchant's subscription to the gateway on ePays "
 "(merchantGateway). It is sent to ePays to open this gateway directly."
-msgstr "معرّف اشتراك التاجر في البوابة على ePays (merchantGateway). يُرسل إلى ePays لفتح هذه البوابة مباشرة."
+msgstr ""
+"معرّف اشتراك التاجر في البوابة على ePays (merchantGateway). يُرسل إلى ePays "
+"لفتح هذه البوابة مباشرة."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_udf3
 msgid ""
 "The invoice numbers sent to ePays in udf3, checked again when the payment "
 "completes."
-msgstr "أرقام الفواتير المرسلة إلى ePays في الحقل udf3، ويتم التحقق منها مجددًا عند اكتمال الدفع."
+msgstr ""
+"أرقام الفواتير المرسلة إلى ePays في الحقل udf3، ويتم التحقق منها مجددًا عند "
+"اكتمال الدفع."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_payment_lang
 msgid ""
 "The language of the ePays payment page. \"Customer's language\" uses the "
 "language of the website, then the language of the customer."
-msgstr "لغة صفحة الدفع في ePays. يستخدم خيار \"لغة العميل\" لغة الموقع الإلكتروني، ثم لغة العميل."
+msgstr ""
+"لغة صفحة الدفع في ePays. يستخدم خيار \"لغة العميل\" لغة الموقع الإلكتروني، "
+"ثم لغة العميل."
 
 #. module: payment_epays
 #. odoo-python
@@ -681,7 +800,9 @@ msgstr "يجب ألا تقل مدة صلاحية رابط الدفع عن دقي
 msgid ""
 "The public IP address of this server could not be found: it may not reach "
 "the internet. Ask your hosting provider for its outbound IP address."
-msgstr "تعذّر العثور على عنوان IP العام لهذا الخادم: ربما لا يصل إلى الإنترنت. اطلب من مزوّد الاستضافة عنوان IP الصادر الخاص به."
+msgstr ""
+"تعذّر العثور على عنوان IP العام لهذا الخادم: ربما لا يصل إلى الإنترنت. اطلب "
+"من مزوّد الاستضافة عنوان IP الصادر الخاص به."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_server_ip
@@ -689,14 +810,28 @@ msgid ""
 "The public IP address this Odoo server calls ePays from, as last found by "
 "\"Find this server's IP address\" or the connection test. Your ePays licence"
 " must list it."
-msgstr "عنوان IP العام الذي يتصل منه خادم Odoo هذا بـ ePays، كما وُجد آخر مرة عبر \"معرفة عنوان IP لهذا الخادم\" أو اختبار الاتصال. يجب أن يتضمنه ترخيص ePays الخاص بك."
+msgstr ""
+"عنوان IP العام الذي يتصل منه خادم Odoo هذا بـ ePays، كما وُجد آخر مرة عبر "
+"\"معرفة عنوان IP لهذا الخادم\" أو اختبار الاتصال. يجب أن يتضمنه ترخيص ePays "
+"الخاص بك."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_udf2
 msgid ""
 "The sales order numbers sent to ePays in udf2, checked again when the "
 "payment completes."
-msgstr "أرقام أوامر البيع المرسلة إلى ePays في الحقل udf2، ويتم التحقق منها مجددًا عند اكتمال الدفع."
+msgstr ""
+"أرقام أوامر البيع المرسلة إلى ePays في الحقل udf2، ويتم التحقق منها مجددًا "
+"عند اكتمال الدفع."
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_watch_until
+msgid ""
+"The scheduled check reads this cancelled payment until then, as ePays can "
+"still charge it."
+msgstr ""
+"يقرأ الفحص المجدول هذه الدفعة الملغاة حتى ذلك الوقت، إذ يمكن أن يخصمها "
+"ePays."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_provider__code
@@ -732,7 +867,9 @@ msgstr "طريقة الدفع هذه لم تعد متاحة."
 msgid ""
 "This payment was not needed: your order was already paid or cancelled. "
 "Please contact us to have it returned, quoting the reference %s."
-msgstr "لم تكن هذه الدفعة مطلوبة لأن طلبك مدفوع مسبقًا أو ملغى. يرجى التواصل معنا لاستردادها مع ذكر المرجع %s."
+msgstr ""
+"لم تكن هذه الدفعة مطلوبة لأن طلبك مدفوع مسبقًا أو ملغى. يرجى التواصل معنا "
+"لاستردادها مع ذكر المرجع %s."
 
 #. module: payment_epays
 #. odoo-python
@@ -746,7 +883,9 @@ msgstr "عنوان IP لهذا الخادم"
 msgid ""
 "This server's public IP address is %s. Ask ePays to add it to your licence, "
 "then click Test connection."
-msgstr "عنوان IP العام لهذا الخادم هو %s. اطلب من ePays إضافته إلى ترخيصك، ثم انقر على اختبار الاتصال."
+msgstr ""
+"عنوان IP العام لهذا الخادم هو %s. اطلب من ePays إضافته إلى ترخيصك، ثم انقر "
+"على اختبار الاتصال."
 
 #. module: payment_epays
 #. odoo-python
@@ -754,7 +893,15 @@ msgstr "عنوان IP العام لهذا الخادم هو %s. اطلب من eP
 msgid ""
 "This server's public IP address is %s. Your ePays licence already allows it:"
 " the connection works."
-msgstr "عنوان IP العام لهذا الخادم هو %s. يسمح به ترخيص ePays الخاص بك بالفعل: الاتصال يعمل."
+msgstr ""
+"عنوان IP العام لهذا الخادم هو %s. يسمح به ترخيص ePays الخاص بك بالفعل: "
+"الاتصال يعمل."
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "Transaction %(reference)s: %(state)s."
+msgstr "المعاملة %(reference)s: %(state)s."
 
 #. module: payment_epays
 #. odoo-python
@@ -779,13 +926,30 @@ msgstr "فيزا"
 msgid ""
 "We could not confirm your payment. Please contact us before trying again, "
 "quoting the reference %s."
-msgstr "تعذّر علينا تأكيد دفعتك. يرجى التواصل معنا قبل المحاولة مرة أخرى، مع ذكر المرجع %s."
+msgstr ""
+"تعذّر علينا تأكيد دفعتك. يرجى التواصل معنا قبل المحاولة مرة أخرى، مع ذكر "
+"المرجع %s."
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_provider__epays_warnings
+msgid "What the administrator should know about this provider now."
+msgstr "ما ينبغي للمسؤول معرفته عن هذا المزوّد الآن."
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_at_bank
+msgid "With the Gateway"
+msgstr "لدى البوابة"
 
 #. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "You can try again or choose another payment method."
 msgstr "يمكنك المحاولة مرة أخرى أو اختيار طريقة دفع أخرى."
+
+#. module: payment_epays
+#: model_terms:ir.ui.view,arch_db:payment_epays.state_header
+msgid "Your bank is still confirming this payment."
+msgstr "ما زال مصرفك يؤكد هذه الدفعة."
 
 #. module: payment_epays
 #: model_terms:ir.ui.view,arch_db:payment_epays.payment_provider_form
@@ -843,7 +1007,21 @@ msgstr "تم رفض الدفع: %s."
 msgid ""
 "Your payment was refunded, so your order was not confirmed. Please contact "
 "us, quoting the reference %s."
-msgstr "تم استرداد دفعتك، لذلك لم يتم تأكيد طلبك. يرجى التواصل معنا مع ذكر المرجع %s."
+msgstr ""
+"تم استرداد دفعتك، لذلك لم يتم تأكيد طلبك. يرجى التواصل معنا مع ذكر المرجع "
+"%s."
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
+"Your previous payment for this order is still being confirmed. If you "
+"completed it, your order will update by itself, so please do not pay again. "
+"If you did not, you can try again in a few minutes."
+msgstr ""
+"لا يزال تأكيد دفعتك السابقة لهذا الطلب جاريًا. إذا كنت قد أتممتها فسيتحدّث "
+"طلبك تلقائيًا، لذا يُرجى عدم الدفع مرة أخرى. وإن لم تكن قد أتممتها، يمكنك "
+"المحاولة مرة أخرى بعد بضع دقائق."
 
 #. module: payment_epays
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__code__epays
@@ -913,6 +1091,11 @@ msgid "ePays Unanswered Payment Request"
 msgstr "طلب دفع ePays لم يُرَد عليه"
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_provider__epays_warnings
+msgid "ePays Warnings"
+msgstr "تحذيرات ePays"
+
+#. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid "ePays answered with HTTP %(status)s %(code)s %(message)s"
@@ -922,18 +1105,36 @@ msgstr "ردّت ePays برمز HTTP %(status)s %(code)s %(message)s"
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid ""
-"ePays charged %(charged)s for transaction %(reference)s, more than the "
-"%(due)s left to pay on these documents: refund the difference on ePays."
-msgstr "حصّل ePays مبلغ %(charged)s للمعاملة %(reference)s، وهو أكثر من %(due)s المتبقي دفعه على هذه المستندات: يرجى رد الفرق عبر ePays."
+"ePays charged the customer for payment %(payment)s (transaction "
+"%(reference)s) although these documents were already paid or cancelled. Odoo"
+" did not record it: refund it on ePays."
+msgstr ""
+"قام ePays بتحصيل المبلغ من العميل للدفعة %(payment)s (المعاملة "
+"%(reference)s) رغم أن هذه المستندات مدفوعة مسبقًا أو ملغاة. لم يسجلها Odoo: "
+"يرجى ردها عبر ePays."
 
 #. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid ""
 "ePays charged the customer for payment %(payment)s (transaction "
-"%(reference)s) although these documents were already paid or cancelled. Odoo"
-" did not record it: refund it on ePays."
-msgstr "قام ePays بتحصيل المبلغ من العميل للدفعة %(payment)s (المعاملة %(reference)s) رغم أن هذه المستندات مدفوعة مسبقًا أو ملغاة. لم يسجلها Odoo: يرجى ردها عبر ePays."
+"%(reference)s), which does not match these documents. Odoo did not record "
+"it, and takes no new payment on them until the transaction is released: "
+"review them, and refund it on ePays if it is not needed."
+msgstr ""
+"خصم ePays من العميل الدفعة %(payment)s (المعاملة %(reference)s)، وهي لا "
+"تطابق هذه المستندات. لم يسجلها Odoo، ولن يقبل دفعات جديدة عليها حتى تُحرَّر "
+"المعاملة: راجعها، واسترد المبلغ من ePays إذا لم تكن بحاجة إليه."
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid ""
+"ePays charges in %(charged)s and no exchange rate from %(currency)s is "
+"known, so ePays is not offered."
+msgstr ""
+"يخصم ePays بعملة %(charged)s ولا يوجد سعر صرف معروف من %(currency)s، لذا لا "
+"يُعرض ePays."
 
 #. module: payment_epays
 #. odoo-python
@@ -961,11 +1162,19 @@ msgstr "تفاصيل دفع ePays للمعاملة %s"
 
 #. module: payment_epays
 #. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "ePays payment status"
+msgstr "حالة دفعة ePays"
+
+#. module: payment_epays
+#. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid ""
 "ePays returned gateways in a format this version of the addon cannot read, "
 "so nothing was changed. Update the ePays addon."
-msgstr "أعاد ePays البوابات بصيغة لا يستطيع هذا الإصدار من تطبيق ePays قراءتها، لذلك لم يتم تغيير أي شيء. حدِّث تطبيق ePays."
+msgstr ""
+"أعاد ePays البوابات بصيغة لا يستطيع هذا الإصدار من تطبيق ePays قراءتها، لذلك"
+" لم يتم تغيير أي شيء. حدِّث تطبيق ePays."
 
 #. module: payment_epays
 #. odoo-python
@@ -973,12 +1182,29 @@ msgstr "أعاد ePays البوابات بصيغة لا يستطيع هذا ال
 msgid ""
 "ePays sees this server as %s, and your licence does not allow it yet. Ask "
 "ePays to add this IP address to your licence."
-msgstr "ترى ePays هذا الخادم بالعنوان %s، ولا يسمح به ترخيصك بعد. اطلب من ePays إضافة عنوان IP هذا إلى ترخيصك."
+msgstr ""
+"ترى ePays هذا الخادم بالعنوان %s، ولا يسمح به ترخيصك بعد. اطلب من ePays "
+"إضافة عنوان IP هذا إلى ترخيصك."
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_review_needed
+msgid ""
+"ePays took money that does not match the documents. No new payment can be "
+"made on them until the merchant has reviewed it."
+msgstr ""
+"خصم ePays مبلغًا لا يطابق المستندات. لا يمكن إجراء دفعة جديدة عليها حتى "
+"يراجعها التاجر."
 
 #. module: payment_epays
 #: model:ir.actions.server,name:payment_epays.cron_epays_poll_pending_ir_actions_server
 msgid "ePays: check pending payments"
 msgstr "ePays: التحقق من المدفوعات المعلّقة"
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid "ePays: review transaction %s"
+msgstr "ePays: راجع المعاملة %s"
 
 #. module: payment_epays
 #. odoo-python
@@ -1010,7 +1236,9 @@ msgstr "تعذّر الوصول إلى واجهة ePays البرمجية (%s). �
 msgid ""
 "the ePays licence does not allow the IP address of this Odoo server (%s). "
 "Ask ePays to register this IP address."
-msgstr "لا يسمح ترخيص ePays بعنوان IP الخاص بخادم Odoo هذا (%s). اطلب من ePays تسجيل عنوان IP هذا."
+msgstr ""
+"لا يسمح ترخيص ePays بعنوان IP الخاص بخادم Odoo هذا (%s). اطلب من ePays تسجيل"
+" عنوان IP هذا."
 
 #. module: payment_epays
 #. odoo-python
@@ -1018,7 +1246,9 @@ msgstr "لا يسمح ترخيص ePays بعنوان IP الخاص بخادم Odo
 msgid ""
 "the ePays licence does not allow the IP address of this Odoo server. Ask "
 "ePays to register the public IP address of the server."
-msgstr "لا يسمح ترخيص ePays بعنوان IP الخاص بخادم Odoo هذا. اطلب من ePays تسجيل عنوان IP العام للخادم."
+msgstr ""
+"لا يسمح ترخيص ePays بعنوان IP الخاص بخادم Odoo هذا. اطلب من ePays تسجيل "
+"عنوان IP العام للخادم."
 
 #. module: payment_epays
 #. odoo-python
@@ -1026,7 +1256,9 @@ msgstr "لا يسمح ترخيص ePays بعنوان IP الخاص بخادم Odo
 msgid ""
 "the ePays licence does not list the domain %s. Ask ePays to register it, or "
 "set the Merchant Domain to the registered one."
-msgstr "لا يتضمن ترخيص ePays النطاق %s. اطلب من ePays تسجيله، أو اضبط نطاق التاجر على النطاق المسجّل."
+msgstr ""
+"لا يتضمن ترخيص ePays النطاق %s. اطلب من ePays تسجيله، أو اضبط نطاق التاجر "
+"على النطاق المسجّل."
 
 #. module: payment_epays
 #. odoo-python

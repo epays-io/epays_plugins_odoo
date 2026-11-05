@@ -1,8 +1,13 @@
 # ePays for Odoo — what is left
 
-Status on 2026-11-04. The addon (`payment_epays` 18.0.1.0.6, not yet on the store) is
-feature-complete and tested: 173 tests with sales and accounting, 147 with the module alone, lint
-clean, upgraded from 18.0.1.0.5. 18.0.1.0.6 acknowledges finished payments on ePays
+Status on 2026-11-05. The addon (`payment_epays` 18.0.1.0.7, not yet on the store) is
+feature-complete and tested: 215 tests with sales and accounting, 182 with the module alone, lint
+clean, upgraded from 18.0.1.0.6. 18.0.1.0.7 aligns it with the WooCommerce plugin (see *Parity* in
+`CLAUDE.md`) and encrypts the master keys, tested end-to-end against the local API with
+`PAYMENT_IN_FLIGHT` (commit `c27da288`): shop checkout and decline in Arabic, card payment, decline
+and retry, Back to Store, a void during 3-D Secure, a cancelled order voided by the cron, also at
+3-D Secure. A charge landing on a voided payment cannot be forced on that server: mock tests only.
+18.0.1.0.6 acknowledges finished payments on ePays
 (`POST /api/v2/Payments/{id}/acknowledgement`): completed, declined and cancelled, but not money
 ePays took that Odoo refused. It also follows ePays when a payment Odoo voided is charged anyway
 (3-D Secure answered after the void), tested on the local API with two tabs. 18.0.1.0.5 was tested
@@ -46,6 +51,10 @@ methods.
 
 ## 3. Release order with the ePays core API (2026-10-20)
 
+- [ ] **Publish 18.0.1.0.7 before the ePays API with `PAYMENT_IN_FLIGHT` reaches production.** It
+      refuses the void of a payment the customer may be paying (HTTP 409) and adds `inFlight`,
+      `inFlightUntil` and `lateCapture` to the payment details. 18.0.1.0.6 and older treat that
+      payment as voidable: the customer reads a connection error, and an orphan stays payable.
 - [ ] **Publish 18.0.1.0.5 before the ePays API of 2026-10-18 reaches production.** That API
       renamed v2 fields (`gatewayId`/`merchantGateway` → `subscriptionId`, gateway type
       `gatewayId` → `gatewayTypeId`, `paidAt` → `completedAt`, statuses in snake case). On it,
@@ -89,12 +98,15 @@ For every shop that uses the addon:
       any currency code. The addon always sends BHD; other clients are not protected.
 - [ ] **Exchange rates**: shops selling in other currencies need up-to-date rates (Accounting >
       Settings > *Automatic Currency Rates*); include it in merchant onboarding?
-- [ ] **Refunds**: out of scope for this version (payments only). A customer who paid an order
-      twice is refunded by the merchant on ePays; Odoo notes it on the order, and the customer is
-      not told on the page (the confirmation shows the payment that counted).
-- [ ] **A payment corrected on ePays after Odoo cancelled it**: past two hours the shop only sees
-      it when ePays resends the notification (`POST /api/v2/Payments/{id}/notify-deliveries`), for
-      up to 30 days. Who at ePays runs that reconciliation, and when?
+- [ ] **Refunds**: out of scope for both integrations, a separate later release, although ePays has
+      a refund API (`POST /api/v2/payments/{id}/refunds`). A customer who paid an order twice is
+      told, and refunded by the merchant on ePays. A refund made on ePays after a payment completed
+      does not reach Odoo or WooCommerce.
+- [ ] **A payment corrected on ePays after Odoo cancelled it**: past its watch the shop only sees it
+      when ePays resends the notification (`POST /api/v2/Payments/{id}/notify-deliveries`), or the
+      merchant clicks *Check ePays Status*. Who at ePays runs that reconciliation, and when?
+- [ ] **An encryption key on Odoo.sh**: without `odoo.conf` access, the keys are encrypted with
+      `database.secret`. Is an environment variable available there?
 
 ## 6. Clean up the development environment
 
