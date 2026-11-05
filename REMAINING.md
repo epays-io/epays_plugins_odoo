@@ -1,7 +1,7 @@
 # ePays for Odoo — what is left
 
 Status on 2026-11-05. The addon (`payment_epays` 18.0.1.0.7, not yet on the store) is
-feature-complete and tested: 215 tests with sales and accounting, 182 with the module alone, lint
+feature-complete and tested: 220 tests with sales and accounting, 186 with the module alone, lint
 clean, upgraded from 18.0.1.0.6. 18.0.1.0.7 aligns it with the WooCommerce plugin (see *Parity* in
 `CLAUDE.md`) and encrypts the master keys, tested end-to-end against the local API with
 `PAYMENT_IN_FLIGHT` (commit `c27da288`): shop checkout and decline in Arabic, card payment, decline
@@ -94,8 +94,8 @@ For every shop that uses the addon:
 - [ ] **HSTS in development**: ePays sends `Strict-Transport-Security` on HTTPS in every
       environment (`SecurityHeadersMiddleware`), so browsers force `https://localhost:8069` after
       visiting the dev ePays. Limit it to production?
-- [ ] **ePays currency check**: `CURRENCY_NOT_SUPPORTED` is defined but never raised, so ePays takes
-      any currency code. The addon always sends BHD; other clients are not protected.
+- [x] **ePays currency check**: ePays refuses any currency but BHD with 422
+      `CURRENCY_NOT_SUPPORTED` (2026-10-21). The addon always sends BHD.
 - [ ] **Exchange rates**: shops selling in other currencies need up-to-date rates (Accounting >
       Settings > *Automatic Currency Rates*); include it in merchant onboarding?
 - [ ] **Refunds**: out of scope for both integrations, a separate later release, although ePays has

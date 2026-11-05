@@ -605,10 +605,29 @@ if AccountPaymentCommon is not None:
             self.assertFalse(tx.epays_review_needed)
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
-        def test_a_late_charge_in_another_currency_follows_the_rate_of_the_day(self):
-            """ S12: what a new payment would charge now, as `rates->charge_for()` does. """
+        def test_a_late_charge_on_the_orders_own_payment_ignores_a_moved_rate(self):
+            """ S11: it charged what was stored, as in WooCommerce. A customer whose link expired
+            while the bank answered must not wait for a merchant because the rate moved. """
             self.ensure_installed('sale')
             order, (tx,) = self._order_and_attempts('cancel')
+            bhd = self.env.ref('base.BHD')
+            tx.write({
+                'epays_charged_currency_id': bhd.id,
+                'epays_charged_amount': tx.amount * 0.5,
+                'epays_exchange_rate': 0.5,
+            })
+            with patch.object(
+                type(tx), '_epays_convert_to_charge',
+                return_value=(tx.amount * 0.4, bhd, 0.4),
+            ):
+                self.assertTrue(tx._epays_fits_amount_due(True))
+                order.order_line[:1].product_uom_qty += 1
+                self.assertFalse(tx._epays_fits_amount_due(True), "The order changed since.")
+
+        def test_a_replaced_late_charge_in_another_currency_follows_the_rate_of_the_day(self):
+            """ S12: what a new payment would charge now, as `rates->charge_for()` does. """
+            self.ensure_installed('sale')
+            order, (tx, _newer) = self._order_and_attempts('cancel', 'cancel')
             bhd = self.env.ref('base.BHD')
             tx.write({
                 'epays_charged_currency_id': bhd.id,

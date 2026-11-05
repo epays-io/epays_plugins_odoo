@@ -40,7 +40,7 @@ with the API calls, parameters and curl commands. Read the guide first.
 ## Reference code
 
 This checklist comes from the two existing integrations. Read their code when an item is unclear, but
-follow this checklist where they differ from it, as in the two known gaps below.
+follow this checklist where they differ from it, as in the known gap below.
 
 | Integration | Repository | Version | State on 2026-11-06 |
 |---|---|---|---|
@@ -62,12 +62,11 @@ follow this checklist where they differ from it, as in the two known gaps below.
 
 ### Known gaps in the existing integrations
 
-Found on 2026-11-06, not fixed yet. Follow this checklist, not their code, on these two points.
+Found on 2026-11-06. Follow this checklist, not their code, on this point.
 
 | Gap | Where | Checklist item |
 |---|---|---|
-| A late charge on an order's own cancelled payment is compared with today's rate, so a moved rate holds it instead of paying | Odoo | Section 3.9, first row of the decision table |
-| A read that fails or is limited on an old payment that was not replaced is lost | Both | Section 3.9, *ePays corrects a payment later* |
+| A read that fails or is limited on an old payment that was not replaced is lost. Being fixed | WooCommerce | Section 3.9, *ePays corrects a payment later* |
 
 ## Terms
 

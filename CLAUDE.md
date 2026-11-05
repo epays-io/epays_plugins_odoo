@@ -92,14 +92,15 @@ early for other providers.
      later and resend its notification (`POST /api/v2/Payments/{id}/notify-deliveries`; correct the
      status first, Odoo reads it). Public reads are limited (`const.FETCH_LIMIT`, per process; only
      an applied read counts, as ePays's notification may be the only one, and a read that cannot
-     run hands the transaction back to the cron, `_epays_watch_again`). `_epays_owns_payment`: not
+     run hands the transaction back to the cron at any age, `_epays_watch_again`, as ePays counts its
+     call as delivered whatever Odoo did). `_epays_owns_payment`: not
      when a newer transaction took the payment over. Only a `done` target moves it
      (`_set_done`/`_set_error` with `cancel` allowed). `_epays_complete` locks the documents'
      transactions, then asks the accounting what is due (`_epays_get_amount_due`: residuals and
      Odoo's paid transactions, not a sum of attempts; a cancelled document is owed nothing). Nothing
      due: refused with response code `00`, noted on the documents, emailed to the company
      (`_epays_alert_merchant`) and left for a refund on ePays. A charge above what is due, or a late
-     one that is not what a new payment would charge now, is held (`_epays_hold_payment`,
+     replaced one that is not what a new payment would charge now, is held (`_epays_hold_payment`,
      `epays_review_needed`): the other attempts are stopped and no new payment is taken until the
      merchant clicks *Allow a New Payment*. A second transaction holding the same ePays payment
      (`_epays_get_payment_holders`) is one charge, not a refusal. A done payment voids the other

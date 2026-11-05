@@ -827,10 +827,10 @@ msgstr ""
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_watch_until
 msgid ""
-"The scheduled check reads this cancelled payment until then, as ePays can "
-"still charge it."
+"The scheduled check reads this payment until then, as ePays can still "
+"charge it."
 msgstr ""
-"يقرأ الفحص المجدول هذه الدفعة الملغاة حتى ذلك الوقت، إذ يمكن أن يخصمها "
+"يقرأ الفحص المجدول هذه الدفعة حتى ذلك الوقت، إذ يمكن أن يخصمها "
 "ePays."
 
 #. module: payment_epays

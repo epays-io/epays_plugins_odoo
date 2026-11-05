@@ -1166,6 +1166,57 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         make_request_mock.assert_not_called()
         self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
 
+    def test_a_read_that_cannot_run_on_an_old_payment_goes_back_to_the_scheduled_check(self):
+        """ ePays counts its notification as delivered whatever Odoo did with it. """
+        now = fields.Datetime.now()
+        for state in ('pending', 'error'):
+            with self.subTest(state=state):
+                tx = self._create_epays_transaction(
+                    state=state, epays_expires_at=now - timedelta(days=8)
+                )
+                self._set_create_date(tx, now - timedelta(days=9))
+                data = self._payment_data(tx)
+                self.assertFalse(tx._epays_is_read_by_cron())
+
+                def unreachable(provider, method, path, **kwargs):
+                    raise EpaysApiError("unreachable", connection_error="timed out", timed_out=True)
+
+                with self._patch_make_request(unreachable), mute_logger(TX_LOGGER):
+                    tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                self.assertEqual(tx.state, state)
+                self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
+
+                self._run_cron(lambda provider, method, path, data=data, **kwargs: data)
+                self.assertEqual(tx.state, 'done', "The scheduled check read it after all.")
+
+    def test_a_limited_read_on_an_old_payment_goes_back_to_the_scheduled_check(self):
+        now = fields.Datetime.now()
+        tx = self._create_epays_transaction(state='error', epays_expires_at=now - timedelta(days=8))
+        self._set_create_date(tx, now - timedelta(days=9))
+        with self._patch_make_request(lambda *args, **kwargs: {}) as make_request_mock, \
+                patch.object(type(tx), '_epays_may_read_payment', return_value=False), \
+                mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        make_request_mock.assert_not_called()
+        self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
+
+    def test_a_read_that_cannot_run_on_a_recent_payment_stays_with_the_scheduled_check(self):
+        tx = self._create_epays_transaction(state='pending')
+        with patch.object(type(tx), '_epays_may_read_payment', return_value=False), \
+                mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertFalse(tx.epays_watch_until, "The scheduled check reads it anyway.")
+
+    def test_a_notification_days_later_completes_an_old_declined_payment(self):
+        """ The customer's money was taken after all, and ePays corrected the payment. """
+        now = fields.Datetime.now()
+        tx = self._create_epays_transaction(state='error', epays_expires_at=now - timedelta(days=8))
+        self._set_create_date(tx, now - timedelta(days=9))
+        with self._patch_payment_details(self._payment_data(tx)), \
+                mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(tx.state, 'done')
+
     def test_a_failed_read_does_not_use_up_the_next_one(self):
         """ ePays notifies once: a timeout must leave the retry free to record the charge. """
         tx = self._create_epays_transaction(state='cancel')

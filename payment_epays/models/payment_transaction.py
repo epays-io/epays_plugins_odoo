@@ -113,8 +113,7 @@ class PaymentTransaction(models.Model):
     )
     epays_watch_until = fields.Datetime(
         string="Checked Until",
-        help="The scheduled check reads this cancelled payment until then, as ePays can still "
-             "charge it.",
+        help="The scheduled check reads this payment until then, as ePays can still charge it.",
         readonly=True,
     )
     epays_review_needed = fields.Boolean(
@@ -1127,17 +1126,18 @@ class PaymentTransaction(models.Model):
                 self.reference, self.state,
             )
             return
-        # ePays may not call again about a cancelled payment, and the scheduled check may have
-        # stopped reading it: a read that cannot run goes back to the check, or a charge is lost.
+        # ePays may not call again, and counts this call as delivered whatever happens here. The
+        # scheduled check may have stopped reading an old payment: a read that cannot run goes back
+        # to the check, or a charge is lost.
         if not self._epays_may_read_payment():
             _logger.info("not checking transaction %s with ePays again yet", self.reference)
-            if self.state == 'cancel':
+            if not self._epays_is_read_by_cron():
                 self._epays_watch_again()
             return
         try:
             payment_data = self._epays_fetch_payment_details()
         except ValidationError:
-            if self.state != 'cancel':
+            if self._epays_is_read_by_cron():
                 raise
             self._epays_watch_again()
             return
@@ -1236,8 +1236,8 @@ class PaymentTransaction(models.Model):
         return max(expires_at + const.CRON_VOID_GRACE_PERIOD, now + const.LATE_CHARGE_WINDOW)
 
     def _epays_watch_again(self):
-        """ Make the scheduled check read this cancelled transaction's payment, at least for as long
-        as a newly cancelled one.
+        """ Make the scheduled check read this transaction's payment, at least for as long as a
+        newly cancelled one.
 
         Note: self.ensure_one()
 
@@ -1247,6 +1247,24 @@ class PaymentTransaction(models.Model):
         limit = fields.Datetime.now() + const.LATE_CHARGE_WINDOW
         if not self.epays_watch_until or self.epays_watch_until < limit:
             self.epays_watch_until = limit
+
+    def _epays_is_read_by_cron(self):
+        """ Return whether the scheduled check reads this transaction's payment by itself.
+
+        Note: self.ensure_one()
+
+        :return: Whether a read that cannot run now can be left to it.
+        :rtype: bool
+        """
+        self.ensure_one()
+        now = fields.Datetime.now()
+        if self.state in ('draft', 'pending'):
+            return self.create_date >= now - const.CRON_MAX_AGE
+        if self.state == 'error':
+            return bool(self.epays_expires_at) and (
+                self.epays_expires_at >= now - const.CRON_VOID_GRACE_PERIOD
+            )
+        return False
 
     def _set_canceled(self, state_message=None, extra_allowed_states=()):
         """ Override of `payment` to keep reading the ePays payment of a cancelled transaction. """
@@ -1467,7 +1485,8 @@ class PaymentTransaction(models.Model):
     def _epays_fits_amount_due(self, is_late):
         """ Return whether this charge fits what the documents expect now.
 
-        A charge above what is due cannot be recorded. A late charge, which the documents stopped
+        A charge above what is due cannot be recorded. A late charge on the documents' own payment
+        charged what they expected, if they did not change since. A replaced one, which they stopped
         expecting, has to be what they would charge now, as a new payment would: rates included.
         A payment on time can be below it: paying a part of a document is legitimate.
 
@@ -1486,6 +1505,9 @@ class PaymentTransaction(models.Model):
             return False
         if not is_late:
             return True
+        if self.currency_id.compare_amounts(self.amount, amount_due) == 0 \
+                and self._epays_is_latest_attempt():
+            return True
         charged_amount, charged_currency, _rate = self._epays_get_charge()
         if charged_currency == self.currency_id:  # Nothing was converted: no rate is needed.
             return charged_currency.compare_amounts(charged_amount, amount_due) == 0
@@ -1494,6 +1516,19 @@ class PaymentTransaction(models.Model):
         except ValidationError:
             return False
         return charged_currency.compare_amounts(charged_amount, charge_due) == 0
+
+    def _epays_is_latest_attempt(self):
+        """ Return whether no newer ePays payment replaced this one on the documents.
+
+        Note: self.ensure_one()
+
+        :return: Whether this is the documents' own payment.
+        :rtype: bool
+        """
+        self.ensure_one()
+        return not self._epays_get_document_transactions().filtered(
+            lambda t: t.provider_code == 'epays' and t.provider_reference and t.id > self.id
+        )
 
     def _epays_hold_payment(self, payment_data):
         """ Refuse a charge that does not match the documents, and hold them for the merchant.
@@ -1818,7 +1853,8 @@ class PaymentTransaction(models.Model):
             '|',
             '&', ('state', '=', 'error'),
             ('epays_expires_at', '>=', now - const.CRON_VOID_GRACE_PERIOD),
-            '&', ('state', '=', 'cancel'), ('epays_watch_until', '>=', now),
+            '&', ('state', 'in', ('draft', 'pending', 'error', 'cancel')),
+            ('epays_watch_until', '>=', now),
         ])
         for tx in txs_to_poll:
             reference = tx.reference
