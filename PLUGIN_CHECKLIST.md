@@ -44,7 +44,7 @@ follow this checklist where they differ from it, as in the known gap below.
 
 | Integration | Repository | Version | State on 2026-11-06 |
 |---|---|---|---|
-| Odoo 18 addon | `epays-io/epays_plugins_odoo` | 18.0.1.0.7 | Committed on `18.0-late-charges`, not pushed or published |
+| Odoo 18 addon | `epays-io/epays_plugins_odoo` | 18.0.1.0.7 | On `18.0`, the branch the Odoo Apps Store scans |
 | WooCommerce plugin | `epays-io/epays_plugins_woocommerce` | 1.0.0 | On `release-1.0.0`, not published |
 
 | Topic | Odoo (`payment_epays/`) | WooCommerce (`src/`) |
