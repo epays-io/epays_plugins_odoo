@@ -12,7 +12,7 @@ from markupsafe import Markup
 from werkzeug import urls
 
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tools import SQL
 from odoo.tools.lru import LRU
 
@@ -128,6 +128,12 @@ class PaymentTransaction(models.Model):
         help="The scheduled check reads this payment until then, as ePays can still charge it.",
         readonly=True,
     )
+    epays_read_failed_at = fields.Datetime(
+        string="ePays Read Failing Since",
+        help="The first scheduled read that failed since the last good one. The payment stays "
+             "checked for at most three days from then.",
+        readonly=True,
+    )
     epays_review_needed = fields.Boolean(
         string="Merchant Review Needed",
         help="ePays took money that does not match the documents. No new payment can be made on "
@@ -139,6 +145,16 @@ class PaymentTransaction(models.Model):
         help="ePays took this money and Odoo did not record it. It never will: refund it on ePays "
              "if it is not needed.",
         readonly=True,
+    )
+
+    epays_unapplied_reported = fields.Boolean(
+        string="Unrecorded Charge Reported",
+        help="The merchant was told that ePays charged this payment and Odoo could not record it.",
+        readonly=True,
+    )
+    epays_review_releasable = fields.Boolean(
+        string="Review Can Be Released",
+        compute='_compute_epays_review_releasable',
     )
 
     # Payment details received from ePays.
@@ -168,6 +184,13 @@ class PaymentTransaction(models.Model):
             tx.epays_gateway_response_display = '\n'.join(
                 f'{label}: {value}' for label, value in lines
             ) or False
+
+    @api.depends('epays_review_needed')
+    def _compute_epays_review_releasable(self):
+        """ A merchant who cancelled or settled the documents has decided: they expect no new
+        payment to allow. """
+        for tx in self:
+            tx.epays_review_releasable = tx.epays_review_needed and tx._epays_is_needed()
 
     #=== BUSINESS METHODS - HELPERS ===#
 
@@ -1208,8 +1231,7 @@ class PaymentTransaction(models.Model):
         # to the check, or a charge is lost.
         if not self._epays_may_read_payment():
             _logger.info("not checking transaction %s with ePays again yet", self.reference)
-            if not self._epays_is_read_by_cron():
-                self._epays_watch_again()
+            self._epays_hand_back()
             return
         self._epays_count_read()
         try:
@@ -1219,7 +1241,7 @@ class PaymentTransaction(models.Model):
                 raise
             self._epays_watch_again()
             return
-        self._epays_apply_payment_details(payment_data)
+        self._epays_apply_or_hand_back(payment_data)
 
     def action_epays_check_status(self):
         """ Read the transaction's payment from ePays, and the attempts Odoo cancelled on its
@@ -1263,7 +1285,8 @@ class PaymentTransaction(models.Model):
         """
         self.ensure_one()
         self._epays_check_release_access()
-        self.epays_review_needed = False
+        if self.epays_review_releasable:
+            self.epays_review_needed = False
 
     def _epays_check_release_access(self):
         """ Allow the release to who may configure the provider, or edit every document it holds.
@@ -1347,8 +1370,39 @@ class PaymentTransaction(models.Model):
         if not self.epays_watch_until or self.epays_watch_until < limit:
             self.epays_watch_until = limit
 
+    def _epays_hand_back(self):
+        """ Give this transaction's payment to the scheduled check, if it does not read it by
+        itself: nobody else may read it again.
+
+        Note: self.ensure_one()
+
+        :return: None
+        """
+        self.ensure_one()
+        if not self._epays_is_read_by_cron():
+            self._epays_watch_again()
+
+    def _epays_record_failed_read(self):
+        """ Keep a payment read through an outage of ePays, as a late charge would go unread if
+        the outage outlasted its watch. The limit from the first failure stops a payment that can
+        never be read being read for ever.
+
+        Note: self.ensure_one()
+
+        :return: None
+        """
+        self.ensure_one()
+        now = fields.Datetime.now()
+        if not self.epays_read_failed_at:
+            self.epays_read_failed_at = now
+        if self._epays_is_read_by_cron():
+            return
+        limit = min(now + const.LATE_CHARGE_WINDOW, self.epays_read_failed_at + const.CRON_MAX_AGE)
+        if not self.epays_watch_until or self.epays_watch_until < limit:
+            self.epays_watch_until = limit
+
     def _epays_is_read_by_cron(self):
-        """ Return whether the scheduled check reads this transaction's payment by itself.
+        """ Return whether the scheduled check's next run reads this transaction's payment.
 
         Note: self.ensure_one()
 
@@ -1356,12 +1410,12 @@ class PaymentTransaction(models.Model):
         :rtype: bool
         """
         self.ensure_one()
-        now = fields.Datetime.now()
+        next_run = fields.Datetime.now() + const.CRON_INTERVAL
         if self.state in ('draft', 'pending'):
-            return self.create_date >= now - const.CRON_MAX_AGE
+            return self.create_date >= next_run - const.CRON_MAX_AGE
         if self.state == 'error':
             return bool(self.epays_expires_at) and (
-                self.epays_expires_at >= now - const.CRON_VOID_GRACE_PERIOD
+                self.epays_expires_at >= next_run - const.CRON_VOID_GRACE_PERIOD
             )
         return False
 
@@ -1421,7 +1475,7 @@ class PaymentTransaction(models.Model):
     def _epays_refresh_for_status_page(self):
         """ Read the payment for a customer waiting on the status page, within the limit.
 
-        A failure only means that the next poll tries again.
+        The next poll tries again after a failure, and the scheduled check if the customer left.
 
         Note: self.ensure_one()
 
@@ -1429,13 +1483,15 @@ class PaymentTransaction(models.Model):
         """
         self.ensure_one()
         if not self._epays_may_read_payment():
+            self._epays_hand_back()
             return
         self._epays_count_read()
         try:
-            with self.env.cr.savepoint():
-                self._epays_apply_payment_details(self._epays_fetch_payment_details())
+            payment_data = self._epays_fetch_payment_details()
         except ValidationError:
+            self._epays_hand_back()
             return
+        self._epays_apply_or_hand_back(payment_data)
 
     def _epays_fetch_payment_details(self):
         """ Fetch the v2 payment details of the transaction from ePays.
@@ -1445,7 +1501,45 @@ class PaymentTransaction(models.Model):
         :return: The `data` of the v2 payment details.
         :rtype: dict
         """
-        return self._epays_request_payment('GET')
+        payment_data = self._epays_request_payment('GET')
+        if self.epays_read_failed_at:
+            self.epays_read_failed_at = False
+        return payment_data
+
+    def _epays_apply_or_hand_back(self, payment_data):
+        """ Apply the payment details, or give the payment to the scheduled check if that fails,
+        e.g. another module refused the completion: this read may be the last one.
+
+        Note: self.ensure_one()
+
+        :param dict payment_data: The `data` of the v2 payment details.
+        :return: None
+        """
+        self.ensure_one()
+        try:
+            with self.env.cr.savepoint():
+                self._epays_apply_payment_details(payment_data)
+        except UserError as error:
+            _logger.warning(
+                "could not apply the ePays payment of transaction %s: %s", self.reference, error
+            )
+            self._epays_hand_back()
+            self._epays_report_unapplied_charge(payment_data)
+
+    def _epays_report_unapplied_charge(self, payment_data):
+        """ Tell the merchant once about a charge that Odoo cannot record: it keeps being read,
+        and only the logs would show the money otherwise.
+
+        Note: self.ensure_one()
+
+        :param dict payment_data: The `data` of the v2 payment details.
+        :return: None
+        """
+        self.ensure_one()
+        if not self.epays_unapplied_reported \
+                and epays_utils.get_payment_state(payment_data)[0] == 'done':
+            self.epays_unapplied_reported = True
+            self._epays_tell_merchant(self._epays_for_merchant()._epays_get_unapplied_note())
 
     def _epays_apply_payment_details(self, payment_data):
         """ Verify the payment details and update the transaction state accordingly.
@@ -1477,7 +1571,7 @@ class PaymentTransaction(models.Model):
                 # completes a payment only with this code, but a server may not report it.
                 self.epays_response_code = const.APPROVED_RESPONSE_CODE
             if self.state in ('done', 'error', 'cancel'):
-                self._epays_log_payment_details(payment_data)
+                self._epays_for_merchant()._epays_log_payment_details(payment_data)
         return updated_txs
 
     def _epays_record_at_bank(self, payment_data):
@@ -1487,13 +1581,20 @@ class PaymentTransaction(models.Model):
         :return: None
         """
         at_bank = epays_utils.is_at_bank(payment_data)
-        if self.epays_at_bank != at_bank:
+        now = fields.Datetime.now()
+        is_unwatched = not self.epays_watch_until or self.epays_watch_until < now
+        is_new = self.epays_at_bank != at_bank
+        if is_new:
             self.epays_at_bank = at_bank
-            # Read for as long as if it had been with the gateway when it was cancelled.
-            if at_bank and self.state == 'cancel':
-                self.epays_watch_until = max(
-                    self.epays_watch_until or fields.Datetime.now(), self._epays_get_watch_limit()
-                )
+        # Read for as long as if it had been with the gateway when it was stopped, also one still
+        # there that nobody reads any more. A declined payment is being paid again on its link.
+        is_left_alone = self.state == 'error' or (
+            self.state != 'done' and not self._epays_is_read_by_cron()
+        )
+        if at_bank and is_left_alone and (is_new or is_unwatched):
+            self.epays_watch_until = max(
+                self.epays_watch_until or now, self._epays_get_watch_limit()
+            )
 
     def _epays_apply_target_state(self, target_state, status, payment_data):
         """ Move the transaction to the state that ePays reports.
@@ -1522,9 +1623,11 @@ class PaymentTransaction(models.Model):
             if self.state == 'draft':
                 updated_txs = self._set_pending()
         elif target_state == 'error':
-            updated_txs = self._set_error(
-                self._epays_get_customer_message('declined', payment_data)
-            )
+            # The customer is paying it again on its link: only the bank's answer decides now.
+            if not epays_utils.is_at_bank(payment_data):
+                updated_txs = self._set_error(
+                    self._epays_get_customer_message('declined', payment_data)
+                )
         elif target_state == 'cancel':
             updated_txs = self._set_canceled(
                 self._epays_get_customer_message('cancelled', payment_data)
@@ -1604,12 +1707,12 @@ class PaymentTransaction(models.Model):
         if not orders and not invoices:
             return True
         amount_due = self._epays_get_amount_due()
-        if self.currency_id.compare_amounts(self.amount, amount_due) > 0:
+        comparison = self._epays_compare_in_charge_currency(amount_due)
+        if comparison > 0:
             return False
         if not is_late:
             return True
-        if self.currency_id.compare_amounts(self.amount, amount_due) == 0 \
-                and self._epays_is_latest_attempt():
+        if comparison == 0 and self._epays_is_latest_attempt():
             return True
         charged_amount, charged_currency, _rate = self._epays_get_charge()
         if charged_currency == self.currency_id:  # Nothing was converted: no rate is needed.
@@ -1619,6 +1722,21 @@ class PaymentTransaction(models.Model):
         except ValidationError:
             return False
         return charged_currency.compare_amounts(charged_amount, charge_due) == 0
+
+    def _epays_compare_in_charge_currency(self, amount):
+        """ Compare the transaction's amount with another one as ePays charged it, at the stored
+        rate: what is below a fils is no change, e.g. a cent of a weak currency.
+
+        Note: self.ensure_one()
+
+        :param float amount: The amount, in the transaction's currency.
+        :return: -1, 0 or 1 if the transaction's amount is below, equal to or above it.
+        :rtype: int
+        """
+        self.ensure_one()
+        currency = self.epays_charged_currency_id or self.currency_id
+        rate = self.epays_exchange_rate or 1.0
+        return currency.compare_amounts(self.amount * rate, amount * rate)
 
     def _epays_is_latest_attempt(self):
         """ Return whether no newer ePays payment replaced this one on the documents.
@@ -1645,17 +1763,52 @@ class PaymentTransaction(models.Model):
         """
         updated_txs = self._epays_refuse_payment(
             self._epays_get_customer_message('mismatch', payment_data),
-            _(
-                "ePays charged the customer for payment %(payment)s (transaction %(reference)s), "
-                "which does not match these documents. Odoo did not record it, and takes no new "
-                "payment on them until the transaction is released: review them, and refund it on "
-                "ePays if it is not needed.",
-                payment=self.provider_reference, reference=self.reference,
-            ),
+            self._epays_for_merchant()._epays_get_held_note(),
         )
         if updated_txs:
             self.epays_review_needed = True
         return updated_txs
+
+    def _epays_for_merchant(self):
+        """ Return the transaction in its company's language, for what the merchant is told: the
+        read that found the charge can come from the customer, or from nobody in particular. A
+        company without one gets the addon's English, not the language of that read.
+
+        :return: The transaction, in that language.
+        :rtype: recordset of `payment.transaction`
+        """
+        return self.with_context(lang=self.company_id.partner_id.lang)
+
+    def _epays_tell_merchant(self, message):
+        """ Note the message on the documents and email it to the company.
+
+        Note: self.ensure_one()
+
+        :param str message: What the merchant has to know.
+        :return: None
+        """
+        self.ensure_one()
+        self._log_message_on_linked_documents(message)
+        self._epays_for_merchant()._epays_alert_merchant(message)
+
+    def _epays_get_unapplied_note(self):
+        """ Return what the merchant is told about a charge that Odoo could not record. """
+        return _(
+            "ePays charged the customer for payment %(payment)s (transaction %(reference)s), but "
+            "Odoo could not record it. Odoo keeps reading it: check why, and refund it on ePays "
+            "if it is not needed.",
+            payment=self.provider_reference, reference=self.reference,
+        )
+
+    def _epays_get_held_note(self):
+        """ Return what the merchant is told about a charge that does not match the documents. """
+        return _(
+            "ePays charged the customer for payment %(payment)s (transaction %(reference)s), "
+            "which does not match these documents. Odoo did not record it, and takes no new "
+            "payment on them until the transaction is released: review them, and refund it on "
+            "ePays if it is not needed.",
+            payment=self.provider_reference, reference=self.reference,
+        )
 
     def _epays_refuse_unneeded_payment(self, payment_data):
         """ Refuse a charge on documents that were paid or cancelled meanwhile.
@@ -1670,12 +1823,16 @@ class PaymentTransaction(models.Model):
         )
         return self._epays_refuse_payment(
             self._epays_get_customer_message('paid_twice', payment_data),
-            _(
-                "ePays charged the customer for payment %(payment)s (transaction %(reference)s) "
-                "although these documents were already paid or cancelled. Odoo did not record it: "
-                "refund it on ePays.",
-                payment=self.provider_reference, reference=self.reference,
-            ),
+            self._epays_for_merchant()._epays_get_unneeded_note(),
+        )
+
+    def _epays_get_unneeded_note(self):
+        """ Return what the merchant is told about a charge that the documents do not need. """
+        return _(
+            "ePays charged the customer for payment %(payment)s (transaction %(reference)s) "
+            "although these documents were already paid or cancelled. Odoo did not record it: "
+            "refund it on ePays.",
+            payment=self.provider_reference, reference=self.reference,
         )
 
     def _epays_refuse_payment(self, message, merchant_message):
@@ -1692,8 +1849,7 @@ class PaymentTransaction(models.Model):
         updated_txs = self._set_error(message, extra_allowed_states=('cancel', 'error'))
         if updated_txs:
             self.epays_charge_refused = True
-            self._log_message_on_linked_documents(merchant_message)
-            self._epays_alert_merchant(merchant_message)
+            self._epays_tell_merchant(merchant_message)
         return updated_txs
 
     def _epays_alert_merchant(self, message):
@@ -1941,6 +2097,11 @@ class PaymentTransaction(models.Model):
                     "could not check the ePays payment of transaction %s: %s", reference, error
                 )
                 self.env.cr.rollback()
+                try:
+                    tx._epays_record_failed_read()
+                    self.env.cr.commit()
+                except psycopg2.OperationalError:
+                    self.env.cr.rollback()  # The next run fails on it again.
             except Exception:  # noqa: BLE001 - one failing transaction must not stop the others.
                 _logger.exception(
                     "encountered an error while checking the ePays payment of transaction %s",
@@ -2002,7 +2163,7 @@ class PaymentTransaction(models.Model):
                 if target_state == 'pending':
                     self._epays_record_at_bank(payment_data)
                     return
-        self._epays_apply_payment_details(payment_data)
+        self._epays_apply_or_hand_back(payment_data)
 
     def _epays_is_left_open(self, payment_data):
         """ Return whether another transaction should have voided this payment. It voids the other
@@ -2039,6 +2200,19 @@ class PaymentTransaction(models.Model):
         if not documents:
             return bool(self.epays_udf2 or self.epays_udf3)
         return all(document.sudo().state == 'cancel' for document in documents)
+
+    def _epays_waits_for_bank(self):
+        """ Return whether this stopped or declined payment is with the gateway, whose answer can
+        still take the money: its customer waits, and must not pay again.
+
+        Note: self.ensure_one()
+
+        :return: Whether the customer has to wait.
+        :rtype: bool
+        """
+        self.ensure_one()
+        return self.state in ('cancel', 'error') and self.epays_at_bank \
+            and self.sudo()._epays_owns_payment()
 
     def _epays_is_link_open(self):
         """ Return whether the payment link can still be paid, as far as Odoo knows. """
@@ -2165,7 +2339,9 @@ class PaymentTransaction(models.Model):
 
         Odoo's state can lag behind: ePays may have charged the payment since, and acknowledging it
         would remove it from the payments ePays lists for the merchant. Money that ePays took and
-        Odoo refused (an amount or reference mismatch, a refund, a second payment) stays there too.
+        Odoo refused (an amount or reference mismatch, a refund, a second payment) stays there too,
+        as does a payment voided or declined after the gateway approved its money, or one being
+        paid again on its link.
         A payment charged after this check is safe: ePays clears the mark when a payment completes.
 
         Note: self.ensure_one()
@@ -2187,13 +2363,9 @@ class PaymentTransaction(models.Model):
             )
             return False
         self._epays_record_at_bank(payment_data)
-        response_code = str(
-            epays_utils.read_payment(payment_data)['response_code'] or ''
-        ).strip()
-        return (
-            epays_utils.get_payment_state(payment_data)[0] in ('error', 'cancel')
-            and response_code != const.APPROVED_RESPONSE_CODE
-        )
+        return epays_utils.get_payment_state(payment_data)[0] in ('error', 'cancel') \
+            and not epays_utils.has_approved_code(payment_data) \
+            and not epays_utils.is_at_bank(payment_data)
 
     def _epays_acknowledge(self):
         """ Mark the ePays payment of the transaction as processed by the merchant.

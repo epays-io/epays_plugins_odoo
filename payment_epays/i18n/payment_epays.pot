@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0-20260908\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 05:05+0000\n"
-"PO-Revision-Date: 2026-11-06 05:05+0000\n"
+"POT-Creation-Date: 2026-11-06 05:46+0000\n"
+"PO-Revision-Date: 2026-11-06 05:46+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -540,6 +540,11 @@ msgid "Result"
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_review_releasable
+msgid "Review Can Be Released"
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_udf2
 msgid "Sales Orders Sent (udf2)"
 msgstr ""
@@ -710,6 +715,13 @@ msgid ""
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_read_failed_at
+msgid ""
+"The first scheduled read that failed since the last good one. The payment "
+"stays checked for at most three days from then."
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_gateway_response
 msgid ""
 "The gateway response returned by ePays, as JSON. Card data is masked by "
@@ -747,6 +759,13 @@ msgstr ""
 msgid ""
 "The language the ePays page was opened in, and the customer's messages "
 "follow."
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_unapplied_reported
+msgid ""
+"The merchant was told that ePays charged this payment and Odoo could not "
+"record it."
 msgstr ""
 
 #. module: payment_epays
@@ -858,6 +877,11 @@ msgstr ""
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__reference
 msgid "Transaction Reference"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_unapplied_reported
+msgid "Unrecorded Charge Reported"
 msgstr ""
 
 #. module: payment_epays
@@ -1035,6 +1059,11 @@ msgid "ePays Payment Page"
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_read_failed_at
+msgid "ePays Read Failing Since"
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_transaction_id
 msgid "ePays Transaction ID"
 msgstr ""
@@ -1062,6 +1091,15 @@ msgid ""
 "ePays charged the customer for payment %(payment)s (transaction "
 "%(reference)s) although these documents were already paid or cancelled. Odoo"
 " did not record it: refund it on ePays."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
+"ePays charged the customer for payment %(payment)s (transaction "
+"%(reference)s), but Odoo could not record it. Odoo keeps reading it: check "
+"why, and refund it on ePays if it is not needed."
 msgstr ""
 
 #. module: payment_epays

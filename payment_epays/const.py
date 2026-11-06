@@ -180,6 +180,8 @@ REUSE_MIN_REMAINING_VALIDITY = timedelta(minutes=5)
 # declined one has its own limit, the expiry of its link, and a cancelled one `epays_watch_until`.
 CRON_MIN_AGE = timedelta(minutes=5)
 CRON_MAX_AGE = timedelta(days=3)
+# How often it runs, as in `data/ir_cron.xml`.
+CRON_INTERVAL = timedelta(minutes=15)
 # A payment still pending this long after its link expired is voided on ePays.
 CRON_VOID_GRACE_PERIOD = timedelta(minutes=30)
 # ePays cannot always stop a customer who is already past its payment page: a payment voided or
