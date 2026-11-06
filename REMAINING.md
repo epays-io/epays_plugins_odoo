@@ -35,10 +35,11 @@ one suite at a time, spaced out.
 The `arabic` scenario found a real defect, and its earlier passes proved nothing, as a language set
 from another process had not reached the server's cache. `/payment/transaction` and the portal's
 route are not website routes, so a logged-in contact's language beat the website's. The page now
-follows the website's `frontend_lang` cookie: checked live, without a card, for English by default,
-English chosen and Arabic chosen. **Still to run with a card on this fix:** `arabic`, `arabic_shop`
-and a payment in each language. A payment at the bank is covered by mock tests only: ePays reports
-`inFlight` while the bank answers, not on 3-D Secure, so a browser cannot hold it there.
+follows the website's `frontend_lang` cookie: checked live for English by default, English chosen
+and Arabic chosen, then with a card on `6c715d0`: `arabic`, `arabic_shop` and a paid order in each
+language for a contact in the other one, 12 of 12 checks. A payment at the bank is covered by mock
+tests only: ePays reports `inFlight` while the bank answers, not on 3-D Secure, so a browser cannot
+hold it there.
 
 | Fix | Here | Why |
 |---|---|---|
