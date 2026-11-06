@@ -106,12 +106,14 @@ class EpaysPostProcessing(PaymentPostProcessing):
     def epays_failure(self):
         """ Return why the customer's last ePays payment did not complete, for the payment step.
 
-        Only the transaction monitored in the customer's own session is read.
+        Only the transaction monitored in the customer's own session is read. Nothing is said
+        while the bank decides: the message would send that customer to pay again.
 
         :return: The state (`error` or `cancel`) and the message, or an empty dict.
         :rtype: dict
         """
         tx = self._get_monitored_transaction()
-        if tx.provider_code != 'epays' or tx.state not in ('error', 'cancel'):
+        if tx.provider_code != 'epays' or tx.state not in ('error', 'cancel') \
+                or tx._epays_waits_for_bank():
             return {}
         return {'state': tx.state, 'message': tx.state_message or ''}

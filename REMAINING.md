@@ -3,7 +3,7 @@
 Status on 2026-11-06. The addon (`payment_epays` 18.0.1.0.8, not yet on the store) is
 feature-complete and tested: 237 tests with sales and accounting, 196 with the module alone, lint
 clean, upgraded from 18.0.1.0.7. 18.0.1.0.8 takes the WooCommerce plugin's last review fixes, see
-*Review fixes from WooCommerce* below; these have run in mock tests only, not end to end.
+*Review fixes from WooCommerce* below.
 18.0.1.0.7 aligns it with the WooCommerce plugin (see *Parity* in
 `CLAUDE.md`) and encrypts the master keys, tested end-to-end against the local API with
 `PAYMENT_IN_FLIGHT` (commit `c27da288`): shop checkout and decline in Arabic, card payment, decline
@@ -22,24 +22,25 @@ methods.
 ## Review fixes from WooCommerce (18.0.1.0.8)
 
 The plugin's last review changed shared payment logic, so each fix was checked against the addon.
-The new parity rows are not in `CLAUDE.md` yet.
+An independent review of the port then found seven more problems, fixed in the same version.
 
 | Fix | Here | Why |
 |---|---|---|
-| A read that fails or is limited goes back to the cron | Ported | The notification had it (`0354b17`); the status page now does too |
+| A read that fails or is limited goes back to the cron | Ported | The notification had it (`0354b17`); the status page now does too, and the test is the cron's next run, as a read on its last one has no later one |
+| A failed read in the cron itself goes back to it | Not done | WooCommerce does not either: `hand_back` is on its public routes only. It would read a payment that can never be read for ever, so both plugins need a limit first |
 | The cron voids links nobody reads | Already here | The cron picks transactions by state, not orders, so it reads a held or paid document's links, and a charge on one is refused and reported |
 | The customer paid another order while one was at the bank | Not applicable | WooCommerce only: Odoo keeps one cart order |
 | Still at the bank past the watch: watched again | Ported | `_epays_record_at_bank`, S9 |
-| A completed payment that could not be applied is read again | Ported | `_epays_apply_or_hand_back`: here a failed apply raises, as nothing returns a failure, S10 |
+| A completed payment that could not be applied is read again, and the merchant told once | Ported | `_epays_apply_or_hand_back`: here a failed apply raises, as nothing returns a failure, S10, S29 |
 | A void of gateway-approved money is not acknowledged | Ported | `_epays_took_no_money` read the status, not the code, S16. An orphan is listed as pending, as in WooCommerce |
 | A release answers one refusal; a later one holds again | Already here | `epays_review_needed` is per transaction |
 | A released payment is still read before a new one | Already here | `_epays_check_replaced_payments` and `_epays_find_live_attempts` |
 | No release on a cancelled or refunded order | Ported | `epays_review_releasable`: documents that expect nothing, paid ones included |
-| A declined payment paid again waits for the bank, and is kept | Ported | The retry already kept it. It was shown as declined, which sent the customer to pay again |
+| A declined payment paid again waits for the bank, and is kept | Ported | The retry already kept it. It was shown as declined, which sent the customer to pay again. It is not acknowledged meanwhile, S26 |
 | "No money was taken" needs `inFlight` and no approved code | Not applicable | S24: Odoo's session follows the replacement, so it has no such message |
 | A completed payment on a refunded order is reported | Already here, one difference | Odoo has no refunded order: the accounting decides. A refunded invoice owes nothing and its charge is reported. An order paid outside any transaction whose invoice was reversed is due again, as a reversal can also correct an invoice |
 | The order total is compared in fils | Ported | `_epays_compare_in_charge_currency`, S15 |
-| Merchant emails in the site language | Ported | `_epays_for_merchant`: the company's language, for notes too |
+| Merchant emails in the site language | Ported | `_epays_for_merchant`: the company's language, for every note, S28 |
 
 ## 1. Tests still to do
 

@@ -184,14 +184,14 @@ is made in both, with a test named after its scenario in both. Refunds are out o
 | S6 | Void refused on retry | Re-read; no second payment unless it turned out paid |
 | S7 | Another payment settles the order | Other attempts voided, except any at the bank; the scheduler voids what stays open, until the watch ends |
 | S8 | Order or document cancelled with an open link | Link voided on ePays, even at the bank |
-| S9 | Replaced payment watched by the scheduler | Until `max(link expiry + 30 min, replaced + 2 h)`; `max(link expiry, replaced) + 3 days` at the bank, also when found there later |
-| S10 | Callback for a replaced payment | Read at any age; a read that is limited or fails goes back to the scheduler |
+| S9 | Replaced payment watched by the scheduler | Until `max(link expiry + 30 min, replaced + 2 h)`; `max(link expiry, replaced) + 3 days` at the bank, also when found there later or still there after the watch |
+| S10 | Callback for a replaced payment | Read at any age; a read that is limited, fails or cannot be applied goes back to the scheduler |
 | S11 | Late charge that matches what is due now | Order paid with it; other payment voided |
 | S12 | Late charge that does not match what is due now | Nothing recorded, other attempts stopped, new payments blocked until released; merchant told by note, log and email; customer told |
 | S13 | Second charge on a paid order | Nothing recorded; merchant told by note, log and email; customer told |
 | S14 | Current payment mismatch | Not paid, customer told to contact the shop, merchant told by note, log and email, new payments blocked until released |
-| S15 | Order total changed after the payment was created | A charge above what is due is refused as in S12 |
-| S16 | Acknowledgement | Completed, and declined, cancelled or voided with no money taken: acknowledged. Refused or refunded: not |
+| S15 | Order total changed after the payment was created | Compared in fils at the stored rate. A charge above what is due is refused as in S12 |
+| S16 | Acknowledgement | Completed, and declined, cancelled or voided with no money taken: acknowledged. Refused, refunded, or voided after the gateway approved the money: not |
 | S17 | Public routes | At most 5 ePays reads a minute per payment attempt; the scheduler and admin action are exempt; malformed ids rejected without a lookup |
 | S18 | Waiting page | Each poll reads ePays within the limit; a customer whose replaced payment is at the bank keeps waiting |
 | S19 | Admin status check | Reads the current and all replaced payments, at any age |
@@ -200,6 +200,11 @@ is made in both, with a test named after its scenario in both. Refunds are out o
 | S22 | Admin warnings | Unreadable key, sandbox shown to customers, no exchange rate, rates over 7 days old |
 | S23 | Gateway sync | Follows `nextCursor`, up to 10 pages |
 | S24 | Void refused while the customer may be paying | Not reported as a connection failure, no second payment, void retried once ePays allows it |
+| S25 | Merchant releases a refused payment | Answers that refusal only: a later one holds again, and other payments are still read before a new one. Not offered when the document expects nothing |
+| S26 | Declined payment paid again on its link | Not reported as declined while at the bank; the customer waits; it is not replaced |
+| S27 | Completed payment on a refunded order | Reported, not confirmed |
+| S28 | What the merchant is told | In the site's language, whoever triggered the read |
+| S29 | Completed payment that cannot be applied | Read again; the merchant is told once, by note, log and email |
 
 **The one intentional difference in logic:** a late charge on a cancelled order. WooCommerce restores
 the order; Odoo refuses the charge and leaves a refund, as reopening a cancelled Odoo order can have
@@ -219,7 +224,13 @@ undone pickings and invoices.
   scheduler in both. Odoo counts a read once it is applied, WooCommerce when it starts.
 - S24: WooCommerce tells a customer back from a replaced payment that no money was taken, on the
   order-pay page. Odoo's session follows the replacement, so that customer never reads it there.
-- WooCommerce only: retiring the links of the customer's other orders (Odoo keeps one cart order);
+- S25: Odoo also hides the release on paid documents, as they expect no payment.
+- S27: Odoo has no refunded order, so the accounting decides. A refunded invoice owes nothing; an
+  order paid outside any transaction whose invoice was reversed is due again, as a reversal can also
+  correct an invoice.
+- S28: Odoo uses the company's language, as it has no site locale.
+- WooCommerce only: retiring the links of the customer's other orders (Odoo keeps one cart order),
+  one at the bank included;
   credentials in `wp-config.php` (Odoo providers are per company); the Localhost redirect exception;
   Classic and Blocks; multi-currency adapters; the privacy eraser; the hold-stock guard; a
   cancelled order's thank-you text (Odoo's status page shows the payment as cancelled).
