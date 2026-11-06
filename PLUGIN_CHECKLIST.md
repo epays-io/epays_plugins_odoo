@@ -18,7 +18,7 @@ with the API calls, parameters and curl commands. Read the guide first.
 6. You are finished when every box is ticked or `N/A`, and [Part 5](#part-5-acceptance-contract) has a
    test name in every row. An empty row means unfinished.
 
-`S1` to `S24` are the acceptance scenarios in Part 5. An item marked `(S4)` is tested by scenario S4.
+`S1` to `S30` are the acceptance scenarios in Part 5. An item marked `(S4)` is tested by scenario S4.
 
 ## What applies to you
 
@@ -647,6 +647,12 @@ Each row needs a test named after the scenario, with this outcome. The test name
 | S22 | Admin warnings | Unreadable key, sandbox shown to customers, no exchange rate, rates over 7 days old | |
 | S23 | Gateway sync | Follows `nextCursor`, up to 10 pages | |
 | S24 | Void refused while the customer may be paying | Not reported as a connection failure, no second payment, void retried once ePays allows it | |
+| S25 | Merchant releases a refused payment | Answers that refusal only: a later one holds again, and other payments are still read before a new one. Not offered when the document expects nothing | |
+| S26 | Declined payment paid again on its link | Not reported as declined while at the bank; the customer waits; it is not replaced | |
+| S27 | Completed payment on a refunded order | Reported, not confirmed | |
+| S28 | What the merchant is told | In the site's language, whoever triggered the read | |
+| S29 | Completed payment that cannot be applied | Read again; the merchant is told once, by note, log and email | |
+| S30 | Scheduled read that fails | Payment stays watched, for at most 3 days after the first failure; a good read resets that; other payments are still read | |
 
 ---
 

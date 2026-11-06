@@ -1,6 +1,6 @@
 # ePays integration checklist: Odoo
 
-`payment_epays` 18.0.1.0.8, filled in on 2026-11-06. This is the filled copy of [PLUGIN_CHECKLIST.md](PLUGIN_CHECKLIST.md), which stays the blank template. A box is ticked only for what was verified on this code. End-to-end and real-gateway items are open because they have not run on it.
+`payment_epays` 18.0.1.0.8, filled in on 2026-11-06. This is the filled copy of [PLUGIN_CHECKLIST.md](PLUGIN_CHECKLIST.md), which stays the blank template. A box is ticked only for what was verified. End to end ran alone on commit `350f3b3`: 39 checks in the scenario pass and 57 in the verification run. Real-gateway items are open because they have not run on it.
 
 What every ePays integration must meet before it goes live, whether it is a plugin for a shop platform
 or a custom integration for one site. "Plugin" below means either, unless the table in *What applies to
@@ -20,7 +20,7 @@ with the API calls, parameters and curl commands. Read the guide first.
 6. You are finished when every box is ticked or `N/A`, and [Part 5](#part-5-acceptance-contract) has a
    test name in every row. An empty row means unfinished.
 
-`S1` to `S24` are the acceptance scenarios in Part 5. An item marked `(S4)` is tested by scenario S4.
+`S1` to `S30` are the acceptance scenarios in Part 5. An item marked `(S4)` is tested by scenario S4.
 
 ## What applies to you
 
@@ -42,7 +42,7 @@ with the API calls, parameters and curl commands. Read the guide first.
 ## Reference code
 
 This checklist comes from the two existing integrations. Read their code when an item is unclear, but
-follow this checklist where they differ from it, as in the known gap below.
+follow this checklist where they differ from it.
 
 | Integration | Repository | Version | State on 2026-11-06 |
 |---|---|---|---|
@@ -64,11 +64,7 @@ follow this checklist where they differ from it, as in the known gap below.
 
 ### Known gaps in the existing integrations
 
-Found on 2026-11-06. Follow this checklist, not their code, on this point.
-
-| Gap | Where | Checklist item |
-|---|---|---|
-| A read that fails or is limited on an old payment that was not replaced is lost. Being fixed | WooCommerce | Section 3.9, *ePays corrects a payment later* |
+None known on 2026-11-06.
 
 ## Terms
 
@@ -601,19 +597,31 @@ Run in a browser on the final code, against the sandbox or a local ePays API. A 
 does not count. Items marked *newer server* need an ePays API with `inFlight`: ask ePays where to test
 them.
 
-- [ ] Payment approved, in each checkout type.
-- [ ] Declined, then retried on the same document (S4).
-- [ ] Back to store from the ePays page.
+- [x] Payment approved, in each checkout type.
+      *Shop, order payment link, portal order and invoice. Verification run on `350f3b3`.*
+- [x] Declined, then retried on the same document (S4).
+      *`decline_then_retry`, alone on `350f3b3`.*
+- [x] Back to store from the ePays page.
+      *`back_to_store`, alone on `350f3b3`.*
 - [ ] Customer's language: English, Arabic, a bilingual site.
-- [ ] Payment in another currency.
-- [ ] A single method opening its own form.
-- [ ] *Newer server:* voided during 3-D Secure, paid with another method: the charge is withheld, the
+      *Open: Defect found on `350f3b3`: an Arabic contact on the English website gets the ePays page and the decline message in Arabic, as `/payment/transaction` is not a website route and uses the session's language. The Arabic shop and the bilingual shop passed.*
+- [x] Payment in another currency.
+      *A USD order charged in BHD at Odoo's rate of the day. Verification run on `350f3b3`.*
+- [x] A single method opening its own form.
+      *The Card method's page offers no other method, and the payment went through its gateway. Verification run on `350f3b3`.*
+- [x] *Newer server:* voided during 3-D Secure, paid with another method: the charge is withheld, the
       replacement pays.
-- [ ] Document cancelled with an open link, also at 3-D Secure (S8).
-- [ ] A slow 3-D Secure answer.
-- [ ] A payment request answered too late, with its orphan voided.
-- [ ] Master key entered, saved, stored encrypted, and absent from pages and logs.
-- [ ] Install on a fresh site from the release package.
+      *`void_during_3ds`, alone on `350f3b3`.*
+- [x] Document cancelled with an open link, also at 3-D Secure (S8).
+      *`cancelled_order_open_link` and `cancelled_during_3ds`, alone on `350f3b3`.*
+- [x] A slow 3-D Secure answer.
+      *`slow_3ds_answer`, alone on `350f3b3`.*
+- [x] A payment request answered too late, with its orphan voided.
+      *ePays really created the payment; a test proxy held back only its answer. The orphan was voided, and the customer's own payment stayed open and paid the order. Verification run on `350f3b3`.*
+- [x] Master key entered, saved, stored encrypted, and absent from pages and logs.
+      *A random canary typed into the form: stored with `epays1:`, and absent from the page source, every response, the server log and a full database dump. Verification run on `350f3b3`.*
+- [x] Install on a fresh site from the release package.
+      *Activated through Apps from a zip of `350f3b3`, without tests. No errors logged. The package is not tagged yet.*
 
 Late charges cannot be forced on a newer server, and a real at-bank state lasts only while the bank
 answers. Cover both with mock tests, and record that in your open-work list.
@@ -659,6 +667,12 @@ Each row needs a test named after the scenario, with this outcome. The test name
 | S22 | Admin warnings | Unreadable key, sandbox shown to customers, no exchange rate, rates over 7 days old | `test_s22_the_provider_warns_about_what_needs_attention` |
 | S23 | Gateway sync | Follows `nextCursor`, up to 10 pages | `test_s23_the_sync_follows_the_pages_of_gateways` |
 | S24 | Void refused while the customer may be paying | Not reported as a connection failure, no second payment, void retried once ePays allows it | `test_s24_a_void_refused_while_the_customer_pays_is_no_connection_failure`<br>`test_s24_a_refused_void_that_is_still_pending_is_no_connection_failure`<br>`test_s24_an_orphan_in_flight_is_kept_until_epays_allows_the_void` |
+| S25 | Merchant releases a refused payment | Answers that refusal only: a later one holds again, and other payments are still read before a new one. Not offered when the document expects nothing | `test_s25_a_later_refusal_holds_a_released_order_again` |
+| S26 | Declined payment paid again on its link | Not reported as declined while at the bank; the customer waits; it is not replaced | `test_s26_a_declined_payment_paid_again_waits_for_the_bank` |
+| S27 | Completed payment on a refunded order | Reported, not confirmed | `test_s27_a_completed_payment_on_a_refunded_invoice_is_reported` |
+| S28 | What the merchant is told | In the site's language, whoever triggered the read | `test_s28_the_merchant_is_told_in_the_language_of_the_company` |
+| S29 | Completed payment that cannot be applied | Read again; the merchant is told once, by note, log and email | `test_s29_a_completed_payment_that_cannot_be_applied_is_reported_once` |
+| S30 | Scheduled read that fails | Payment stays watched, for at most 3 days after the first failure; a good read resets that; other payments are still read | `test_s30_a_failed_scheduled_read_keeps_a_watched_payment_watched`<br>`test_s30_the_watch_ends_three_days_after_the_first_failure`<br>`test_s30_a_good_read_resets_the_failures` |
 
 ---
 
