@@ -745,7 +745,7 @@ if AccountPaymentCommon is not None:
             self.assertEqual(left_open.state, 'cancel')
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
-        def test_a_later_refusal_holds_a_released_order_again(self):
+        def test_s25_a_later_refusal_holds_a_released_order_again(self):
             """ A release answers one refusal. """
             self.ensure_installed('sale')
             _order, (first, second) = self._order_and_attempts('cancel', 'cancel')
@@ -794,7 +794,7 @@ if AccountPaymentCommon is not None:
             self.assertTrue(held.epays_review_releasable, "The order was reopened.")
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
-        def test_a_completed_payment_on_a_refunded_invoice_is_reported(self):
+        def test_s27_a_completed_payment_on_a_refunded_invoice_is_reported(self):
             """ S13: the customer got the money back, and this charge is not what was refunded. """
             invoice = self.init_invoice(
                 'out_invoice', partner=self.partner, amounts=[100.0], post=True,

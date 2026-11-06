@@ -1,7 +1,7 @@
 # ePays for Odoo — what is left
 
 Status on 2026-11-06. The addon (`payment_epays` 18.0.1.0.8, not yet on the store) is
-feature-complete and tested: 278 tests with sales and accounting, 229 with the module alone,
+feature-complete and tested: 280 tests with sales and accounting, 231 with the module alone,
 lint clean, upgraded from 18.0.1.0.7. 18.0.1.0.8 fixes what the audit against `PLUGIN_CHECKLIST.md`
 found: a held charge is never applied, also after its release, failed reads count towards the
 public limit, and more. It also takes the WooCommerce plugin's last review fixes, see *Review fixes
@@ -35,7 +35,7 @@ answers, not on 3-D Secure, so a browser cannot hold it there.
 | Fix | Here | Why |
 |---|---|---|
 | A read that fails or is limited goes back to the cron | Ported | The notification had it (`0354b17`); the status page now does too, and the test is the cron's next run, as a read on its last one has no later one |
-| A failed read in the cron itself keeps the payment watched | Added in both | S30: `_epays_record_failed_read`, for at most `CRON_MAX_AGE` after the first failure; a good read resets it. The S30 row is not in `CLAUDE.md` yet |
+| A failed read in the cron itself keeps the payment watched | Added in both | S30: `_epays_record_failed_read`, for at most `CRON_MAX_AGE` after the first failure; a good read resets it. |
 | The cron voids links nobody reads | Already here | The cron picks transactions by state, not orders, so it reads a held or paid document's links, and a charge on one is refused and reported |
 | The customer paid another order while one was at the bank | Not applicable | WooCommerce only: Odoo keeps one cart order |
 | Still at the bank past the watch: watched again | Ported | `_epays_record_at_bank`, S9 |

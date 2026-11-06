@@ -3756,7 +3756,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
         self.assertGreaterEqual(tx.epays_watch_until, now + const.CRON_MAX_AGE)
 
-    def test_a_declined_payment_paid_again_waits_for_the_bank(self):
+    def test_s26_a_declined_payment_paid_again_waits_for_the_bank(self):
         """ S24: ePays lets the customer pay it again on its link, so only the bank can decide. """
         tx = self._create_epays_transaction(state='pending')
         data = self._payment_data(
@@ -3829,7 +3829,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(first.state, 'error')
 
     @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
-    def test_the_merchant_is_told_in_the_language_of_the_company(self):
+    def test_s28_the_merchant_is_told_in_the_language_of_the_company(self):
         """ S12: not in the customer's, nor in the one of whoever triggered the read. """
         self._activate_arabic()
         self.env.company.partner_id.lang = 'ar_001'
@@ -3944,7 +3944,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
     def _stuck_mails(self, tx):
         return self.env['mail.mail'].sudo().search([('subject', 'like', tx.reference)])
 
-    def test_a_completed_payment_that_cannot_be_applied_is_reported_once(self):
+    def test_s29_a_completed_payment_that_cannot_be_applied_is_reported_once(self):
         """ S29: it is read again, and nobody would notice the money otherwise. """
         self.env.company.email = 'shop@example.com'
         now = fields.Datetime.now()

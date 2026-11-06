@@ -212,6 +212,7 @@ is made in both, with a test named after its scenario in both. Refunds are out o
 | S27 | Completed payment on a refunded order | Reported, not confirmed |
 | S28 | What the merchant is told | In the site's language, whoever triggered the read |
 | S29 | Completed payment that cannot be applied | Read again; the merchant is told once, by note, log and email |
+| S30 | Scheduled read that fails | Payment stays watched, for at most 3 days after the first failure; a good read resets that; other payments are still read |
 
 **The one intentional difference in logic:** a late charge on a cancelled order. WooCommerce restores
 the order; Odoo refuses the charge and leaves a refund, as reopening a cancelled Odoo order can have
