@@ -267,6 +267,16 @@ def is_at_bank(payment_data):
     return state in ('pending', 'error') and payment_data.get('inFlight') is True
 
 
+def has_approved_code(payment_data):
+    """ Return whether the gateway approved the payment's money, whatever its status says.
+
+    :param dict payment_data: The `data` of the v2 payment details.
+    :return: Whether its response code is the approved one.
+    :rtype: bool
+    """
+    return str(payment_data.get('responseCode') or '').strip() == const.APPROVED_RESPONSE_CODE
+
+
 def parse_json(value):
     """ Return the value parsed as JSON, or `None` if it is empty or not valid JSON. """
     if not value:

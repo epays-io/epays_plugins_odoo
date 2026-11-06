@@ -581,6 +581,11 @@ msgid "Result"
 msgstr "النتيجة"
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_review_releasable
+msgid "Review Can Be Released"
+msgstr "يمكن إنهاء المراجعة"
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_udf2
 msgid "Sales Orders Sent (udf2)"
 msgstr "أوامر البيع المرسلة (udf2)"
@@ -815,6 +820,13 @@ msgstr ""
 "ثم لغة العميل."
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_unapplied_reported
+msgid ""
+"The merchant was told that ePays charged this payment and Odoo could not "
+"record it."
+msgstr "تم إبلاغ التاجر بأن ePays حصّل هذه الدفعة وأن أودو لم يتمكن من تسجيلها."
+
+#. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid "The payment link expiry must be at least one minute."
@@ -939,6 +951,11 @@ msgstr "معرّف المعاملة"
 #: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__reference
 msgid "Transaction Reference"
 msgstr "مرجع المعاملة"
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_unapplied_reported
+msgid "Unrecorded Charge Reported"
+msgstr "تم الإبلاغ عن مبلغ غير مسجل"
 
 #. module: payment_epays
 #: model:payment.method,name:payment_epays.payment_method_epays_brand_visa
@@ -1148,6 +1165,15 @@ msgstr ""
 "قام ePays بتحصيل المبلغ من العميل للدفعة %(payment)s (المعاملة "
 "%(reference)s) رغم أن هذه المستندات مدفوعة مسبقًا أو ملغاة. لم يسجلها Odoo: "
 "يرجى ردها عبر ePays."
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
+"ePays charged the customer for payment %(payment)s (transaction "
+"%(reference)s), but Odoo could not record it. Odoo keeps reading it: check "
+"why, and refund it on ePays if it is not needed."
+msgstr "حصّل ePays المبلغ من العميل للدفعة %(payment)s (المعاملة %(reference)s)، لكن أودو لم يتمكن من تسجيلها. يواصل أودو قراءتها: تحقق من السبب، واسترد المبلغ عبر ePays إذا لم يكن مطلوبًا."
 
 #. module: payment_epays
 #. odoo-python

@@ -80,19 +80,17 @@ class EpaysPostProcessing(PaymentPostProcessing):
         monitored_tx = self._get_monitored_transaction()
         is_at_bank = False
         if monitored_tx.provider_code == 'epays' and monitored_tx.provider_reference:
-            is_at_bank = monitored_tx.state == 'cancel' and monitored_tx.epays_at_bank \
-                and monitored_tx._epays_owns_payment()
+            is_at_bank = monitored_tx._epays_waits_for_bank()
             if monitored_tx.state in ('draft', 'pending') or is_at_bank:
                 monitored_tx._epays_refresh_for_status_page()
-                is_at_bank = is_at_bank and monitored_tx.state == 'cancel' \
-                    and monitored_tx.epays_at_bank
+                is_at_bank = is_at_bank and monitored_tx._epays_waits_for_bank()
         if monitored_tx.provider_code == 'epays' and monitored_tx.state != 'done' \
                 and not monitored_tx._epays_is_refused():
             paying_txs = monitored_tx._epays_get_paying_transactions()
             if paying_txs:
                 self.monitor_transaction(paying_txs[:1])
         values = super().poll_status(**kwargs)
-        if is_at_bank and values.get('state') == 'cancel':
+        if is_at_bank and values.get('state') in ('cancel', 'error'):
             # The bank can still take the money: that customer waits for its answer.
             values['state'] = 'pending'
         is_shop_failure = (
@@ -109,12 +107,14 @@ class EpaysPostProcessing(PaymentPostProcessing):
     def epays_failure(self):
         """ Return why the customer's last ePays payment did not complete, for the payment step.
 
-        Only the transaction monitored in the customer's own session is read.
+        Only the transaction monitored in the customer's own session is read. Nothing is said
+        while the bank decides: the message would send that customer to pay again.
 
         :return: The state (`error` or `cancel`) and the message, or an empty dict.
         :rtype: dict
         """
         tx = self._get_monitored_transaction()
-        if tx.provider_code != 'epays' or tx.state not in ('error', 'cancel'):
+        if tx.provider_code != 'epays' or tx.state not in ('error', 'cancel') \
+                or tx._epays_waits_for_bank():
             return {}
         return {'state': tx.state, 'message': tx.state_message or ''}

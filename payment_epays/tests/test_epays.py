@@ -12,7 +12,7 @@ from psycopg2 import pool
 from psycopg2.errors import SerializationFailure
 
 from odoo import Command, fields
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.modules import neutralize
 from odoo.tests import tagged
 from odoo.tools import config, is_html_empty, mute_logger
@@ -1012,6 +1012,11 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self._skip_if_post_processing_is_stubbed()
         for name, answer, is_acknowledged in [
             ('voided', {'status': 'Voided'}, True),
+            ('voided after the gateway approved it',
+             {'status': 'Voided', 'responseCode': '00'}, False),
+            ('declined after the gateway approved it',
+             {'status': 'Failed', 'responseCode': '00'}, False),
+            ('declined, paid again on its link', {'status': 'Failed', 'inFlight': True}, False),
             ('declined', {'status': 'Failed'}, True),
             ('charged', {'status': 'Completed'}, False),
             ('refunded', {'status': 'Refunded'}, False),
@@ -3655,6 +3660,281 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         html = render()
         self.assertIn("Replaced by", html)
         self.assertIn("alert-danger", html)
+
+    def _old_tx(self, state, **values):
+        """ Return a transaction that the scheduled check no longer reads. """
+        now = fields.Datetime.now()
+        tx = self._create_epays_transaction(
+            state=state, epays_expires_at=now - timedelta(days=8), **values
+        )
+        self._set_create_date(tx, now - timedelta(days=9))
+        return tx
+
+    def test_a_status_page_read_that_cannot_run_goes_back_to_the_scheduled_check(self):
+        """ S10: the customer waits on a payment that the scheduled check no longer reads. """
+        now = fields.Datetime.now()
+
+        def unreachable(provider, method, path, **kwargs):
+            raise EpaysApiError("unreachable", connection_error="timed out", timed_out=True)
+
+        for is_limited in (False, True):
+            with self.subTest(is_limited=is_limited):
+                tx = self._old_tx('pending')
+                with self._patch_make_request(unreachable), mute_logger(TX_LOGGER), patch.object(
+                    type(tx), '_epays_may_read_payment', return_value=not is_limited,
+                ):
+                    tx._epays_refresh_for_status_page()
+                self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
+
+    def test_a_completed_payment_that_cannot_be_applied_goes_back_to_the_scheduled_check(self):
+        """ S10: another module can refuse the completion, and ePays may not call again. """
+        now = fields.Datetime.now()
+        tx = self._old_tx('cancel', epays_watch_until=now - timedelta(days=1))
+        with self._patch_payment_details(self._payment_data(tx)), patch.object(
+            type(tx), '_set_done', side_effect=ValidationError("refused"),
+        ), mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(tx.state, 'cancel')
+        self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
+
+    def test_a_completed_payment_the_cron_cannot_apply_is_read_again(self):
+        """ S9: the last read of its watch must not be the end of it. """
+        now = fields.Datetime.now()
+        tx = self._old_tx('cancel', epays_watch_until=now + timedelta(minutes=1))
+        data = self._payment_data(tx)
+        with patch.object(type(tx), '_set_done', side_effect=ValidationError("refused")):
+            self._run_cron(lambda *args, **kwargs: data)
+        self.assertEqual(tx.state, 'cancel')
+        self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
+
+    def test_a_payment_still_at_the_bank_past_its_watch_is_watched_again(self):
+        """ S9: read by ePays's notification or the merchant, as the scheduled check stopped. """
+        now = fields.Datetime.now()
+        tx = self._old_tx(
+            'cancel', epays_at_bank=True, epays_watch_until=now - timedelta(hours=1)
+        )
+        data = self._payment_data(
+            tx, status='Pending', result='', transactionId=None, inFlight=True
+        )
+        with self._patch_payment_details(data), mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertGreaterEqual(tx.epays_watch_until, now + const.CRON_MAX_AGE)
+
+    def test_a_declined_payment_paid_again_waits_for_the_bank(self):
+        """ S24: ePays lets the customer pay it again on its link, so only the bank can decide. """
+        tx = self._create_epays_transaction(state='pending')
+        data = self._payment_data(
+            tx, status='Failed', result='', transactionId=None, inFlight=True
+        )
+        with self._patch_payment_details(data), mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(tx.state, 'pending', "The customer is not told it was declined.")
+        self.assertFalse(tx.state_message)
+        self.assertTrue(tx.epays_at_bank)
+
+    def test_a_declined_payment_at_the_bank_is_read_past_its_link(self):
+        """ S9: an old declined payment paid again on its link. """
+        now = fields.Datetime.now()
+        tx = self._old_tx('error')
+        data = self._payment_data(
+            tx, status='Failed', result='', transactionId=None, inFlight=True
+        )
+        with self._patch_payment_details(data), mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(tx.state, 'error')
+        self.assertGreaterEqual(tx.epays_watch_until, now + const.CRON_MAX_AGE)
+
+    def test_the_status_page_keeps_a_customer_waiting_on_a_declined_payment_paid_again(self):
+        """ S18: the page would send a customer whose money may be moving back to pay again. """
+        tx = self._create_epays_transaction(state='error', epays_at_bank=True)
+        polled_values = {'provider_code': 'epays', 'state': 'error', 'landing_route': '/my/orders'}
+        controller = EpaysPostProcessing()
+        for data, expected_state in (
+            (self._payment_data(
+                tx, status='Failed', result='', transactionId=None, inFlight=True,
+            ), 'pending'),
+            (self._payment_data(
+                tx, status='Failed', result='', transactionId=None, inFlight=False,
+            ), 'error'),
+        ):
+            with patch.object(
+                EpaysPostProcessing, '_get_monitored_transaction', return_value=tx,
+            ), patch.object(
+                PaymentPostProcessing, 'poll_status', return_value=dict(polled_values),
+            ), self._patch_payment_details(data), mute_logger(TX_LOGGER):
+                values = controller.poll_status()
+            self.assertEqual(values['state'], expected_state)
+
+    def test_the_status_page_does_not_say_declined_while_the_bank_decides(self):
+        tx = self._create_epays_transaction(
+            state='error', epays_at_bank=True, state_message="ePays: Your payment was declined.",
+        )
+        html = str(self.env['ir.qweb']._render('payment.state_header', {
+            'tx': tx, 'is_processing': True, 'is_html_empty': is_html_empty,
+        }))
+        self.assertIn("still confirming", html)
+        self.assertNotIn("declined", html)
+
+    def test_a_retry_keeps_a_declined_payment_paid_again(self):
+        """ S1, S24: it is not replaced, as the bank's answer can still take the money. """
+        self._skip_without_sale()
+        order = self._create_sale_order()
+        first = self._earlier_attempt(order, state='error', amount=order.amount_total - 10)
+        in_flight = self._payment_data(
+            first, status='Failed', result='', transactionId=None, inFlight=True
+        )
+        with self.assertRaises(ValidationError) as error:
+            self._pay_again(
+                [in_flight],
+                delete_response=AssertionError("No void: ePays would refuse it."),
+                **self._order_values(order),
+            )
+        self.assertIn("still being confirmed", error.exception.args[0])
+        self.assertEqual(first.state, 'error')
+
+    @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
+    def test_the_merchant_is_told_in_the_language_of_the_company(self):
+        """ S12: not in the customer's, nor in the one of whoever triggered the read. """
+        self._activate_arabic()
+        self.env.company.partner_id.lang = 'ar_001'
+        self.env.company.email = 'shop@example.com'
+        tx = self._create_epays_transaction(state='pending')
+        with self._patch_payment_details(self._payment_data(tx, amount='1.000')):
+            tx.with_context(lang='en_US')._handle_notification_data(
+                'epays', {'paymentId': tx.provider_reference}
+            )
+        self.assertTrue(tx.epays_review_needed)
+        mail = self.env['mail.mail'].sudo().search([('subject', 'like', tx.reference)])
+        self.assertEqual(len(mail), 1)
+        self.assertNotIn("review transaction", mail.subject)
+        self.assertNotIn("charged the customer", mail.body_html)
+
+    def test_a_plain_user_error_on_a_completed_payment_goes_back_to_the_scheduled_check(self):
+        """ S10: `UserError` is what other modules normally raise, and it escapes neither route. """
+        now = fields.Datetime.now()
+        tx = self._old_tx('cancel', epays_watch_until=now - timedelta(days=1))
+        with self._patch_payment_details(self._payment_data(tx)), patch.object(
+            type(tx), '_set_done', side_effect=UserError("refused"),
+        ), mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(tx.state, 'cancel')
+        self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
+
+    def test_a_read_failing_on_the_last_run_of_the_check_goes_back_to_it(self):
+        """ S10: the check would not read it again, though it still reads it now. """
+        now = fields.Datetime.now()
+        for state, values, create_date in (
+            ('pending', {}, now - const.CRON_MAX_AGE + timedelta(minutes=5)),
+            ('error', {
+                'epays_expires_at': now - const.CRON_VOID_GRACE_PERIOD + timedelta(minutes=5),
+            }, now - timedelta(days=1)),
+        ):
+            with self.subTest(state=state):
+                tx = self._create_epays_transaction(state=state, **values)
+                self._set_create_date(tx, create_date)
+                self.assertFalse(tx._epays_is_read_by_cron())
+                with patch.object(type(tx), '_epays_may_read_payment', return_value=False), \
+                        mute_logger(TX_LOGGER):
+                    tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
+
+    def test_an_old_pending_payment_at_the_bank_is_watched(self):
+        """ S9: a declined payment paid again stays pending, past the age the check reads. """
+        now = fields.Datetime.now()
+        tx = self._old_tx('pending')
+        data = self._payment_data(
+            tx, status='Failed', result='', transactionId=None, inFlight=True
+        )
+        with self._patch_payment_details(data), mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(tx.state, 'pending')
+        self.assertGreaterEqual(tx.epays_watch_until, now + const.CRON_MAX_AGE)
+
+    def test_a_recent_pending_payment_at_the_bank_stays_with_the_scheduled_check(self):
+        tx = self._create_epays_transaction(state='pending')
+        data = self._payment_data(
+            tx, status='Failed', result='', transactionId=None, inFlight=True
+        )
+        with self._patch_payment_details(data), mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertFalse(tx.epays_watch_until, "The scheduled check reads it anyway.")
+
+    @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
+    def test_the_payment_note_is_in_the_language_of_the_company(self):
+        """ S12: it is written for the merchant, whoever triggered the read. """
+        self._skip_without_sale()
+        self._activate_arabic()
+        self.env.company.partner_id.lang = 'ar_001'
+        order = self._create_sale_order()
+        tx = self._create_epays_transaction(state='pending', **self._order_values(order))
+        with self._patch_payment_details(self._payment_data(tx)):
+            tx.with_context(lang='en_US')._handle_notification_data(
+                'epays', {'paymentId': tx.provider_reference}
+            )
+        self.assertEqual(self._count_detail_notes(order), 0, "The labels are not in English.")
+
+    def test_a_company_without_a_language_is_told_in_english(self):
+        """ Not in the customer's language, which is what the context holds on a public route. """
+        self._activate_arabic()
+        self.env.company.partner_id.lang = False
+        tx = self._create_epays_transaction(state='pending')
+        self.assertFalse(tx.with_context(lang='ar_001')._epays_for_merchant().env.lang)
+
+    def test_the_failure_route_says_nothing_while_the_bank_decides(self):
+        """ S18: the message tells the customer to try again, which the status page stopped. """
+        tx = self._create_epays_transaction(
+            state='error', epays_at_bank=True, state_message="ePays: Your payment was declined.",
+        )
+        with patch.object(EpaysPostProcessing, '_get_monitored_transaction', return_value=tx):
+            self.assertEqual(EpaysPostProcessing().epays_failure(), {})
+            tx.epays_at_bank = False
+            self.assertEqual(EpaysPostProcessing().epays_failure()['state'], 'error')
+
+    def test_the_status_page_does_not_wait_on_a_payment_taken_over(self):
+        """ S18: a newer transaction holds the payment, so this one waits for nothing. """
+        tx = self._create_epays_transaction(
+            state='cancel', epays_at_bank=True, state_message="ePays: Replaced by transaction X.",
+        )
+        self._create_epays_transaction(
+            state='pending', provider_reference=tx.provider_reference,
+            epays_environment=tx.epays_environment,
+        )
+        html = str(self.env['ir.qweb']._render('payment.state_header', {
+            'tx': tx, 'is_processing': True, 'is_html_empty': is_html_empty,
+        }))
+        self.assertNotIn("still confirming", html)
+        self.assertIn("Replaced by", html)
+
+    def _stuck_mails(self, tx):
+        return self.env['mail.mail'].sudo().search([('subject', 'like', tx.reference)])
+
+    def test_a_completed_payment_that_cannot_be_applied_is_reported_once(self):
+        """ S29: it is read again, and nobody would notice the money otherwise. """
+        self.env.company.email = 'shop@example.com'
+        now = fields.Datetime.now()
+        tx = self._old_tx('cancel', epays_watch_until=now + timedelta(minutes=1))
+        data = self._payment_data(tx)
+        for _attempt in range(2):
+            with patch.object(type(tx), '_set_done', side_effect=UserError("refused")):
+                self._run_cron(lambda *args, **kwargs: data)
+            self.assertEqual(tx.state, 'cancel')
+            self.assertEqual(len(self._stuck_mails(tx)), 1)
+        self.assertIn("could not record", self._stuck_mails(tx).body_html)
+
+        self._run_cron(lambda *args, **kwargs: data)
+        self.assertEqual(tx.state, 'done')
+        self.assertEqual(len(self._stuck_mails(tx)), 1, "A later success is not one more alert.")
+
+    def test_a_declined_payment_that_cannot_be_applied_is_not_reported(self):
+        """ S29: no money was taken, so the merchant has nothing to act on. """
+        self.env.company.email = 'shop@example.com'
+        tx = self._create_epays_transaction(state='pending')
+        data = self._payment_data(tx, status='Failed', result='', responseCode='05')
+        with self._patch_payment_details(data), patch.object(
+            type(tx), '_set_error', side_effect=UserError("refused"),
+        ), mute_logger(TX_LOGGER):
+            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertFalse(self._stuck_mails(tx))
 
     def test_s19_the_merchant_can_check_a_payment_at_any_age(self):
         """ S19: the replaced payments are read too. """
