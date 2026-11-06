@@ -746,7 +746,7 @@ class PaymentProvider(models.Model):
 
         data = epays_utils.read_api_data(body)
         _logger.info("response received from %s (HTTP %s)", url, response.status_code)
-        _logger.debug("response data:\n%s", pprint.pformat(data))
+        _logger.debug("response data:\n%s", pprint.pformat(epays_utils.get_loggable_data(data)))
         return data
 
     #=== ACTION METHODS ===#

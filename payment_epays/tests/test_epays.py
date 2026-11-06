@@ -1778,6 +1778,21 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual({r.levelname for r in leaks}, {'DEBUG'})
         self.assertTrue([r for r in logs.records if 'INVALID_EMAIL' in r.getMessage()])
 
+    def test_the_payment_url_stays_out_of_the_debug_log(self):
+        """ The payment page URL is a bearer link: see `get_loggable_data`. """
+        url = 'https://testapi.epays.io/Pay/P1?token=secret-token'
+        response = FakeResponse(200, {'status': 'SUCCESS', 'data': {
+            'paymentId': 'P1', 'redirect': url,
+        }})
+        with patch(REQUESTS_PATH, return_value=response), \
+                self.assertLogs(PROVIDER_LOGGER, level='DEBUG') as logs:
+            data = self.provider._epays_make_request(
+                'POST', '/api/v2/Payments', environment='sandbox', domain='shop.example.com',
+            )
+        self.assertEqual(data['redirect'], url, "The caller still gets it.")
+        self.assertTrue([r for r in logs.records if 'P1' in r.getMessage()])
+        self.assertNotIn('secret-token', '\n'.join(logs.output))
+
     def test_a_request_for_the_same_documents_waits_before_reading_epays(self):
         """ Two first clicks would each create a payable link: see `_epays_lock_documents`. """
         self._skip_without_sale()

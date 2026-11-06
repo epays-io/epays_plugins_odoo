@@ -40,7 +40,7 @@ with the API calls, parameters and curl commands. Read the guide first.
 ## Reference code
 
 This checklist comes from the two existing integrations. Read their code when an item is unclear, but
-follow this checklist where they differ from it, as in the known gap below.
+follow this checklist where they differ from it.
 
 | Integration | Repository | Version | State on 2026-11-06 |
 |---|---|---|---|
@@ -62,11 +62,7 @@ follow this checklist where they differ from it, as in the known gap below.
 
 ### Known gaps in the existing integrations
 
-Found on 2026-11-06. Follow this checklist, not their code, on this point.
-
-| Gap | Where | Checklist item |
-|---|---|---|
-| A read that fails or is limited on an old payment that was not replaced is lost. Being fixed | WooCommerce | Section 3.9, *ePays corrects a payment later* |
+None known on 2026-11-06.
 
 ## Terms
 

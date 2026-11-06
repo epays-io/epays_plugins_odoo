@@ -147,6 +147,19 @@ def read_api_data(body):
     return data if isinstance(data, dict) else {}
 
 
+def get_loggable_data(data):
+    """ Return the `data` of a response as a log may hold it: the URL of the payment page is a
+    bearer link, and whoever reads the log could open it.
+
+    :param dict data: The `data` of the response.
+    :return: The data, with that URL masked.
+    :rtype: dict
+    """
+    if 'redirect' not in data:
+        return data
+    return {**data, 'redirect': const.SECRET_MASK}
+
+
 def get_notified_payment_id(notification_data):
     """ Return the payment id of a return or a notification from ePays, as it was received. """
     return notification_data.get('paymentId')
