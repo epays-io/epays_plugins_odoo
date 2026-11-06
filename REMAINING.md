@@ -25,12 +25,12 @@ methods.
 The plugin's last review changed shared payment logic, so each fix was checked against the addon.
 An independent review of the port then found seven more problems, fixed in the same version.
 
-Browser pass on `55cfff3` against the local API: card payment, decline and retry, Back to Store, a
-void during 3-D Secure, a cancelled order's link voided by the cron, also at 3-D Secure, a slow
-3-D Secure answer, a declined payment paid on its own link, and the Arabic shop all pass. The older
-`arabic` scenario (Arabic contact on the English website) fails as it did before this work: the
-website's language decides. A payment at the bank is covered by mock tests only: ePays reports
-`inFlight` while the bank answers, not on 3-D Secure, so a browser cannot hold it there.
+Browser pass on `19f90a0`, the merge with the audit, against the local API: card payment, decline
+and retry, Back to Store, a void during 3-D Secure, a cancelled order's link voided by the cron, also
+at 3-D Secure, a slow 3-D Secure answer, a declined payment paid on its own link, the Arabic shop,
+and an Arabic contact on the English website, where the website's language wins: 10 of 10 scenarios
+pass. A payment at the bank is covered by mock tests only: ePays reports `inFlight` while the bank
+answers, not on 3-D Secure, so a browser cannot hold it there.
 
 | Fix | Here | Why |
 |---|---|---|
