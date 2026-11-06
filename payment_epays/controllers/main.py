@@ -10,6 +10,7 @@ from odoo.http import request
 
 from odoo.addons.payment.controllers.post_processing import PaymentPostProcessing
 from odoo.addons.payment_epays import const
+from odoo.addons.payment_epays import utils as epays_utils
 
 _logger = logging.getLogger(__name__)
 
@@ -40,7 +41,10 @@ class EpaysController(http.Controller):
         :param dict data: The notification data (only `paymentId`).
         :return: The redirection to the payment status page.
         """
-        _logger.info("handling redirection from ePays for payment %.64s", data.get('paymentId'))
+        _logger.info(
+            "handling redirection from ePays for payment %.64s",
+            epays_utils.get_notified_payment_id(data),
+        )
         _logger.debug("notification data:\n%s", pprint.pformat(data))
         if environment:
             data[const.NOTIFICATION_ENVIRONMENT_KEY] = environment

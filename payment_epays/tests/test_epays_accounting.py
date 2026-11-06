@@ -98,7 +98,7 @@ if AccountPaymentCommon is not None:
                 amount=order.amount_total, sale_order_ids=[Command.set(order.ids)],
             )
             with self._patch_payment_details(self._payment_data(tx)):
-                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                tx._handle_notification_data('epays', self._notification_data(tx))
             self.assertEqual(tx.state, 'done')
             calls = []
             with self._patch_make_request(lambda provider, method, path, **kwargs: calls.append(
@@ -123,7 +123,7 @@ if AccountPaymentCommon is not None:
                 (refused, {'amount': '1.000'}),
             ]:
                 with self._patch_payment_details(self._payment_data(tx, **overrides)):
-                    tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                    tx._handle_notification_data('epays', self._notification_data(tx))
             self.assertEqual((declined.state, refused.state), ('error', 'error'))
 
             calls = []
@@ -150,7 +150,7 @@ if AccountPaymentCommon is not None:
                 amount=order.amount_total, sale_order_ids=[Command.set(order.ids)],
             )
             with self._patch_payment_details(self._payment_data(tx)):
-                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                tx._handle_notification_data('epays', self._notification_data(tx))
 
             def handler(provider, method, path, **kwargs):
                 raise EpaysApiError("unreachable", http_status=404)  # An older ePays server.
@@ -171,7 +171,7 @@ if AccountPaymentCommon is not None:
 
         def _notify(self, tx, **overrides):
             with self._patch_payment_details(self._payment_data(tx, **overrides)):
-                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                tx._handle_notification_data('epays', self._notification_data(tx))
 
         def _notes(self, document, text):
             return document.message_ids.filtered(lambda m: text in (m.body or ''))
@@ -841,8 +841,8 @@ if AccountPaymentCommon is not None:
 
             data = self._payment_data(tx)
             with self._patch_payment_details(data):
-                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
-                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                tx._handle_notification_data('epays', self._notification_data(tx))
+                tx._handle_notification_data('epays', self._notification_data(tx))
             self.assertEqual(tx.state, 'done')
             notes = invoice.message_ids.filtered(
                 lambda m: 'ePays payment details' in (m.body or '')
@@ -877,7 +877,7 @@ if AccountPaymentCommon is not None:
             data = self._payment_data(tx)
             self.assertEqual(data['currency'], 'BHD')
             with self._patch_payment_details(data):
-                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                tx._handle_notification_data('epays', self._notification_data(tx))
             self.assertEqual(tx.state, 'done')
 
             with self._patch_make_request(lambda *args, **kwargs: {}):
@@ -890,7 +890,7 @@ if AccountPaymentCommon is not None:
             tx = self._create_epays_transaction()
             self.provider.state = 'disabled'
             calls = []
-            url = self._build_url(EpaysController._return_url)
+            url = self._build_url(f'{EpaysController._return_url}/sandbox')
             with patch(REQUESTS_PATH, side_effect=self._fake_api(tx, calls)), \
                     mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER, CONTROLLER_LOGGER):
                 response = self.opener.get(

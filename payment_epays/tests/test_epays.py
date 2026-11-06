@@ -401,7 +401,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                 if 'status' in overrides and overrides['status'] is None:
                     del data['status']  # An ePays server without the canonical status.
                 with self._patch_payment_details(data):
-                    tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                    tx._handle_notification_data('epays', self._notification_data(tx))
                 self.assertEqual(tx.state, expected_state)
 
     @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
@@ -417,7 +417,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             with self.subTest(**{k: str(v) for k, v in overrides.items()}):
                 tx = self._create_epays_transaction()
                 with self._patch_payment_details(self._payment_data(tx, **overrides)):
-                    tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                    tx._handle_notification_data('epays', self._notification_data(tx))
                 self.assertEqual(tx.state, 'error')
                 # Money may have been taken: the customer is told to get in touch, not to retry.
                 self.assertEqual(tx.state_message, (
@@ -431,7 +431,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         data = self._payment_data(tx, amount=137)
         del data['customFields']  # An ePays server without customFields: udf2/udf3 unchecked.
         with self._patch_payment_details(data):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'done')
 
     @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
@@ -449,7 +449,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             return self._payment_data(tx)
 
         with self._patch_make_request(handler):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(calls[0]['path'], f'/api/v2/Payments/{tx.provider_reference}')
         self.assertEqual(calls[0]['environment'], 'sandbox')
         self.assertEqual(calls[0]['domain'], 'old.example.com')
@@ -465,7 +465,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             status='completed',
         )
         with self._patch_payment_details(data):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'done')
         self.assertEqual(tx.payment_method_id, self.apple_pay_method)
         self.assertEqual(tx.epays_gateway_id, self.apple_pay_gateway_ref)
@@ -478,7 +478,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         del data['gatewayId'], data['paidAt']
         with self._patch_payment_details(data):
             tx_new_server._handle_notification_data(
-                'epays', {'paymentId': tx_new_server.provider_reference}
+                'epays', self._notification_data(tx_new_server)
             )
         self.assertEqual(tx_new_server.payment_method_id, self.card_method)
 
@@ -489,7 +489,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         data = self._payment_data(tx, status='completed', completedAt='2026-10-18T11:00:00')
         del data['paidAt']
         with self._patch_payment_details(data), mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         note = order.message_ids.filtered(lambda m: 'ePays payment details' in (m.body or ''))
         self.assertIn('Result: Completed', note.body, "A snake-case status reads as before.")
         self.assertNotIn('(Completed)', note.body, "The same word is not repeated as the result.")
@@ -499,7 +499,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         tx = self._create_epays_transaction()  # Paid with "ePays": chosen on the ePays page.
         data = self._payment_data(tx, gatewayId=int(self.apple_pay_gateway_ref))
         with self._patch_payment_details(data):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.payment_method_id, self.apple_pay_method)
 
         # An inactive gateway still names the method that took the payment.
@@ -507,14 +507,14 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         data = self._payment_data(tx_benefit, gatewayId=self.benefit_gateway_ref)
         with self._patch_payment_details(data):
             tx_benefit._handle_notification_data(
-                'epays', {'paymentId': tx_benefit.provider_reference}
+                'epays', self._notification_data(tx_benefit)
             )
         self.assertEqual(tx_benefit.payment_method_id, self.benefit_method)
 
         tx_unknown_gateway = self._create_epays_transaction()
         with self._patch_payment_details(self._payment_data(tx_unknown_gateway, gatewayId='99')):
             tx_unknown_gateway._handle_notification_data(
-                'epays', {'paymentId': tx_unknown_gateway.provider_reference}
+                'epays', self._notification_data(tx_unknown_gateway)
             )
         self.assertEqual(tx_unknown_gateway.payment_method_id, self.epays_method)
 
@@ -525,7 +525,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         )
         with self._patch_payment_details(data):
             tx_production_gateway._handle_notification_data(
-                'epays', {'paymentId': tx_production_gateway.provider_reference}
+                'epays', self._notification_data(tx_production_gateway)
             )
         self.assertEqual(tx_production_gateway.payment_method_id, self.epays_method)
 
@@ -563,7 +563,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
     @mute_logger(CONTROLLER_LOGGER, TX_LOGGER, PAYMENT_TX_LOGGER)
     def test_return_route_confirms_the_transaction(self):
         tx = self._create_epays_transaction()
-        url = self._build_url(EpaysController._return_url)
+        url = self._build_url(f'{EpaysController._return_url}/sandbox')
         with self._patch_payment_details(self._payment_data(tx)):
             response = self.opener.get(
                 url, params={'paymentId': tx.provider_reference}, allow_redirects=False
@@ -574,10 +574,10 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
     @mute_logger(CONTROLLER_LOGGER, TX_LOGGER, PAYMENT_TX_LOGGER)
     def test_return_route_accepts_post(self):
         tx = self._create_epays_transaction()
-        url = self._build_url(EpaysController._return_url)
+        url = self._build_url(f'{EpaysController._return_url}/sandbox')
         with self._patch_payment_details(self._payment_data(tx)):
             response = self.opener.post(
-                url, data={'paymentId': tx.provider_reference}, allow_redirects=False
+                url, data=self._notification_data(tx), allow_redirects=False
             )
         self.assertEqual(response.status_code, 303)
         self.assertEqual(tx.state, 'done')
@@ -630,7 +630,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
     def test_payment_details_are_stored_on_the_transaction(self):
         tx = self._create_epays_transaction()
         with self._patch_payment_details(self._payment_data(tx)):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.epays_transaction_id, 'TXN-0001')
         self.assertEqual(tx.epays_gateway_reference, 'GW-REF-1')
         self.assertEqual(tx.epays_response_code, '00')
@@ -654,8 +654,8 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                 patch('odoo.addons.payment.models.payment_transaction.PaymentTransaction'
                       '._cron_post_process'), \
                 mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})  # Ping.
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})  # Return.
+            tx._handle_notification_data('epays', self._notification_data(tx))  # Ping.
+            tx._handle_notification_data('epays', self._notification_data(tx))  # Return.
             self.env['payment.transaction']._cron_epays_poll_pending()  # Cron.
         self.assertEqual(tx.state, 'done')
         self.assertEqual(self._count_detail_notes(order), 1)
@@ -674,7 +674,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                     'customFields'):
             del data[key]  # An ePays server that predates these fields.
         with self._patch_payment_details(data):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'done')
         self.assertFalse(tx.epays_gateway_response)
         self.assertFalse(tx.epays_gateway_response_display)
@@ -706,7 +706,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         )
         with self._patch_payment_details(declined):
             tx.with_context(lang='en_US')._handle_notification_data(
-                'epays', {'paymentId': tx.provider_reference}
+                'epays', self._notification_data(tx)
             )
         self.assertEqual(
             tx.state_message,
@@ -738,7 +738,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                     data['paymentLang'] = payment_lang
                 with self._patch_payment_details(data):
                     tx.with_context(lang='en_US')._handle_notification_data(
-                        'epays', {'paymentId': tx.provider_reference}
+                        'epays', self._notification_data(tx)
                     )
                 self.assertTrue(tx.state_message.startswith(expected), tx.state_message)
 
@@ -764,7 +764,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         }
         tx_en = self._create_epays_transaction()
         with self._patch_payment_details(self._payment_data(tx_en, **declined)):
-            tx_en._handle_notification_data('epays', {'paymentId': tx_en.provider_reference})
+            tx_en._handle_notification_data('epays', self._notification_data(tx_en))
         self.assertEqual(tx_en.state, 'error')
         self.assertEqual(
             tx_en.state_message,
@@ -779,7 +779,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         tx_ar = self._create_epays_transaction()
         with self._patch_payment_details(self._payment_data(tx_ar, **declined)):
             tx_ar.with_context(lang='en_US')._handle_notification_data(
-                'epays', {'paymentId': tx_ar.provider_reference}
+                'epays', self._notification_data(tx_ar)
             )
         self.assertEqual(
             tx_ar.state_message,
@@ -793,7 +793,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         del data['responseDescription']
         with self._patch_payment_details(data):
             tx_old_server._handle_notification_data(
-                'epays', {'paymentId': tx_old_server.provider_reference}
+                'epays', self._notification_data(tx_old_server)
             )
         self.assertEqual(
             tx_old_server.state_message,
@@ -804,7 +804,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
     def test_cancel_tells_the_customer_they_can_try_again(self):
         tx = self._create_epays_transaction()
         with self._patch_payment_details(self._payment_data(tx, status='Cancelled')):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'cancel')
         self.assertEqual(
             tx.state_message,
@@ -815,10 +815,10 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
     def test_retry_after_decline_completes(self):
         tx = self._create_epays_transaction()
         with self._patch_payment_details(self._payment_data(tx, status='Failed')):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'error')
         with self._patch_payment_details(self._payment_data(tx)):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'done')
 
     #=== Cron ===#
@@ -1036,7 +1036,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         tx = self._create_epays_transaction(state='cancel')
         with self._patch_payment_details(self._payment_data(tx)), \
                 mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'done', "ePays's status wins over the cancellation.")
         self.assertEqual(tx.epays_response_code, '00')
 
@@ -1052,7 +1052,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                 tx = self._create_epays_transaction(state='cancel', state_message="Replaced.")
                 with self._patch_payment_details(self._payment_data(tx, status=status)), \
                         mute_logger(TX_LOGGER):
-                    tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                    tx._handle_notification_data('epays', self._notification_data(tx))
                 self.assertEqual((tx.state, tx.state_message), ('cancel', "Replaced."))
 
     def test_a_notification_days_later_completes_a_cancelled_payment(self):
@@ -1069,7 +1069,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
 
         with self._patch_payment_details(self._payment_data(tx)), \
                 mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'done')
 
     def test_a_notification_days_later_changes_nothing_while_epays_was_not_corrected(self):
@@ -1077,14 +1077,14 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         tx.last_state_change = fields.Datetime.now() - timedelta(days=10)
         with self._patch_payment_details(self._payment_data(tx, status='Voided')), \
                 mute_logger(TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual((tx.state, tx.state_message), ('cancel', "Voided."))
 
     def test_a_late_charge_that_does_not_match_is_refused(self):
         tx = self._create_epays_transaction(state='cancel')
         with self._patch_payment_details(self._payment_data(tx, amount='1.000')), \
                 mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'error')
         self.assertEqual(tx.epays_response_code, '00', "So it is left unacknowledged.")
 
@@ -1145,10 +1145,10 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                 with self._patch_payment_details(data) as make_request_mock, \
                         mute_logger(TX_LOGGER):
                     for _i in range(const.FETCH_LIMIT + 2):
-                        tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                        tx._handle_notification_data('epays', self._notification_data(tx))
                     self.assertEqual(make_request_mock.call_count, const.FETCH_LIMIT)
                     with patch.object(const, 'FETCH_LIMIT_WINDOW', 0):
-                        tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                        tx._handle_notification_data('epays', self._notification_data(tx))
                     self.assertEqual(
                         make_request_mock.call_count, const.FETCH_LIMIT + 1,
                         "Read again after the window.",
@@ -1162,7 +1162,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         with self._patch_make_request(lambda *args, **kwargs: {}) as make_request_mock, \
                 patch.object(type(tx), '_epays_may_read_payment', return_value=False), \
                 mute_logger(TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         make_request_mock.assert_not_called()
         self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
 
@@ -1182,7 +1182,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                     raise EpaysApiError("unreachable", connection_error="timed out", timed_out=True)
 
                 with self._patch_make_request(unreachable), mute_logger(TX_LOGGER):
-                    tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                    tx._handle_notification_data('epays', self._notification_data(tx))
                 self.assertEqual(tx.state, state)
                 self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
 
@@ -1196,7 +1196,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         with self._patch_make_request(lambda *args, **kwargs: {}) as make_request_mock, \
                 patch.object(type(tx), '_epays_may_read_payment', return_value=False), \
                 mute_logger(TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         make_request_mock.assert_not_called()
         self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
 
@@ -1204,7 +1204,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         tx = self._create_epays_transaction(state='pending')
         with patch.object(type(tx), '_epays_may_read_payment', return_value=False), \
                 mute_logger(TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertFalse(tx.epays_watch_until, "The scheduled check reads it anyway.")
 
     def test_a_notification_days_later_completes_an_old_declined_payment(self):
@@ -1214,7 +1214,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self._set_create_date(tx, now - timedelta(days=9))
         with self._patch_payment_details(self._payment_data(tx)), \
                 mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'done')
 
     def test_s17_a_failed_read_counts_and_leaves_the_next_one_free(self):
@@ -1227,11 +1227,11 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             raise EpaysApiError("unreachable", connection_error="read timed out", timed_out=True)
 
         with self._patch_make_request(handler), mute_logger(TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertTrue(tx._epays_may_be_charged(), "The scheduled check reads it instead.")
         self.assertEqual(len(tx._epays_get_recent_reads()), 1)
         with self._patch_payment_details(data), mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'done')
 
     def test_s17_failing_reads_stop_at_the_limit(self):
@@ -1245,21 +1245,23 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
 
         with self._patch_make_request(handler), mute_logger(TX_LOGGER):
             for _i in range(const.FETCH_LIMIT + 3):
-                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(len(calls), const.FETCH_LIMIT)
         self.assertTrue(tx._epays_may_be_charged(), "The scheduled check reads it instead.")
 
-    def test_s17_an_unknown_environment_is_refused_without_a_lookup(self):
+    def test_s17_a_missing_or_unknown_environment_is_refused_without_a_lookup(self):
         """ The environment comes from a fixed list, and the URL of the route is public. """
         tx = self._create_epays_transaction(state='pending')
         Transaction = self.env['payment.transaction']
-        with patch.object(
-            type(Transaction), 'search', wraps=Transaction.search,
-        ) as search_mock, self.assertRaises(ValidationError):
-            Transaction._get_tx_from_notification_data('epays', {
-                'paymentId': tx.provider_reference, const.NOTIFICATION_ENVIRONMENT_KEY: 'unknown',
-            })
-        search_mock.assert_not_called()
+        for environment in ('unknown', '', None):
+            data = dict(self._notification_data(tx))
+            data[const.NOTIFICATION_ENVIRONMENT_KEY] = environment
+            with self.subTest(environment=environment), patch.object(
+                type(Transaction), 'search', wraps=Transaction.search,
+            ) as search_mock:
+                with self.assertRaises(ValidationError):
+                    Transaction._get_tx_from_notification_data('epays', data)
+                search_mock.assert_not_called()
 
     def test_s17_a_malformed_payment_id_is_refused_without_a_lookup(self):
         """ S17: the same rule as `ReturnController::is_valid_payment_id`. """
@@ -1281,8 +1283,8 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             with patch.object(
                 type(tx), '_epays_lock_for_update', side_effect=SerializationFailure
             ), self.assertRaises(SerializationFailure):
-                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                tx._handle_notification_data('epays', self._notification_data(tx))
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(make_request_mock.call_count, 2)
         self.assertEqual(tx.state, 'done')
 
@@ -1424,7 +1426,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         # The payment is checked against what was charged, even after the rates moved.
         self._set_rate(self.currency, 0.380)
         with self._patch_payment_details(self._payment_data(tx)):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'done')
 
     @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
@@ -1437,7 +1439,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                 )
                 self._initiate(tx)
                 with self._patch_payment_details(self._payment_data(tx, **overrides)):
-                    tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+                    tx._handle_notification_data('epays', self._notification_data(tx))
                 self.assertEqual(tx.state, 'error')
 
     @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
@@ -1466,7 +1468,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         )
         self._initiate(tx)
         with self._patch_payment_details(self._payment_data(tx)):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         note = order.message_ids.filtered(lambda m: 'ePays payment details' in (m.body or ''))
         self.assertIn(f'Order Amount: {tx.amount:.2f} USD', note.body)
         self.assertIn('Exchange Rate: 1 USD = 0.376 BHD', note.body)
@@ -1685,6 +1687,37 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             "Only the line that does not divide loses its quantity.",
         )
 
+    def test_each_payment_field_is_read_under_its_new_name_then_its_old_one(self):
+        for label, data in (
+            ('new', {'subscriptionId': 'G1', 'completedAt': 'T1'}),
+            ('old', {'gatewayId': 'G1', 'paidAt': 'T1'}),
+            ('both', {
+                'subscriptionId': 'G1', 'gatewayId': 'X', 'completedAt': 'T1', 'paidAt': 'X',
+            }),
+        ):
+            with self.subTest(label):
+                details = epays_utils.read_payment(data)
+                self.assertEqual(details['subscription_id'], 'G1')
+                self.assertEqual(details['completed_at'], 'T1')
+        for label, data in (
+            ('new', {'subscriptionId': ' G1 ', 'gatewayTypeId': 2}),
+            ('old', {'merchantGateway': 'G1', 'gatewayId': 2}),
+        ):
+            with self.subTest(label):
+                details = epays_utils.read_gateway(data)
+                self.assertEqual((details['ref'], details['type_id']), ('G1', 2))
+
+    def test_a_malformed_payload_reads_as_empty(self):
+        details = epays_utils.read_payment({'customFields': 'text', 'paymentLang': 'fr'})
+        self.assertIsNone(details['udf2'])
+        self.assertIsNone(details['page_lang'], "Only what the addon can answer in.")
+        self.assertEqual(epays_utils.read_payment_list({'payments': 'text'}), [])
+        self.assertEqual(epays_utils.read_payment_list({'payments': ['text', {}]}), [{}])
+        self.assertEqual(
+            epays_utils.read_gateway_page({'gateways': 'text', 'nextCursor': 5}), ([], None)
+        )
+        self.assertEqual(epays_utils.read_api_data({'data': ['list']}), {})
+
     def test_the_amount_is_compared_at_the_precision_of_the_charged_currency(self):
         data = {'amount': '37.600', 'currency': 'bhd '}
         self.assertEqual(epays_utils.get_amount_mismatches(data, 37.6, 'BHD', 3), [])
@@ -1710,15 +1743,18 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
 
     def test_a_failed_response_is_read_as_one_kind_of_failure(self):
         error = {'code': 'E1'}
+        failure = {'error_code': 'E1', 'error_message': None, 'details': None}
+        nothing = dict.fromkeys(failure)
         self.assertIsNone(epays_utils.get_api_failure(True, {'status': 'SUCCESS'}))
         self.assertEqual(
-            epays_utils.get_api_failure(True, {'status': 'error', 'error': error}), error,
+            epays_utils.get_api_failure(True, {'status': 'error', 'error': error}), failure,
             "The envelope can fail on HTTP 200.",
         )
-        self.assertEqual(epays_utils.get_api_failure(False, {'error': error}), error)
-        self.assertEqual(epays_utils.get_api_failure(False, {'error': 'text'}), {})
-        self.assertEqual(epays_utils.get_api_failure(True, None), {}, "Not JSON.")
-        self.assertEqual(epays_utils.get_api_failure(True, ['list']), {})
+        self.assertEqual(epays_utils.get_api_failure(False, {'error': error}), failure)
+        for body in (None, ['list'], {'error': 'text'}):
+            with self.subTest(body=body):
+                self.assertEqual(epays_utils.get_api_failure(False, body), nothing)
+        self.assertEqual(epays_utils.get_api_failure(True, None), nothing, "Not JSON.")
 
     def test_an_error_response_is_logged_at_debug_level_only(self):
         """ An error can repeat what the request held, and the code is enough to diagnose it. """
@@ -2182,7 +2218,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
     def test_a_refund_never_completes_an_order(self):
         tx = self._create_epays_transaction()
         with self._patch_payment_details(self._payment_data(tx, status='Refunded')):
-            tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+            tx._handle_notification_data('epays', self._notification_data(tx))
         self.assertEqual(tx.state, 'error')
         self.assertEqual(tx.state_message, (
             "Your payment was refunded, so your order was not confirmed. Please contact us, "
@@ -2204,7 +2240,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             with self.subTest(state=state):
                 with self._patch_make_request(lambda *args, **kwargs: {}) as make_request_mock, \
                         mute_logger(TX_LOGGER):
-                    tx._process_notification_data({'paymentId': tx.provider_reference})
+                    tx._process_notification_data(self._notification_data(tx))
                 make_request_mock.assert_not_called()
                 self.assertEqual(tx.state, state)
 
@@ -2297,8 +2333,8 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(
             lookup('epays', {'paymentId': 'PAY-SHARED', key: 'production'}), tx_production
         )
-        # A payment started before the environment was in the URL: the newest one, as before.
-        self.assertEqual(lookup('epays', {'paymentId': 'PAY-SHARED'}), tx_production)
+        with self.assertRaises(ValidationError, msg="Nothing says which of the two."):
+            lookup('epays', {'paymentId': 'PAY-SHARED'})
 
     def test_the_return_route_with_the_environment_completes_the_transaction(self):
         tx = self._create_epays_transaction()
@@ -2915,12 +2951,12 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(tx_second.provider_reference, self.payment_id)
         self.assertEqual(
             self.env['payment.transaction']._get_tx_from_notification_data(
-                'epays', {'paymentId': self.payment_id}
+                'epays', self._notification_data(tx_second)
             ),
             tx_second,
         )
 
-        url = self._build_url(EpaysController._return_url)
+        url = self._build_url(f'{EpaysController._return_url}/sandbox')
         with self._patch_payment_details(self._payment_data(tx_second)), \
                 mute_logger(CONTROLLER_LOGGER, TX_LOGGER, PAYMENT_TX_LOGGER):
             response = self.opener.get(
@@ -2953,11 +2989,11 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         )
         self.assertGreater(tx_cancelled_newest.id, tx_open.id)
         lookup = self.env['payment.transaction']._get_tx_from_notification_data
-        self.assertEqual(lookup('epays', {'paymentId': self.payment_id}), tx_open)
+        self.assertEqual(lookup('epays', self._notification_data(tx_open)), tx_open)
 
         tx_open.state = 'cancel'
         self.assertEqual(
-            lookup('epays', {'paymentId': self.payment_id}), tx_cancelled_newest,
+            lookup('epays', self._notification_data(tx_open)), tx_cancelled_newest,
             "Without an open transaction, the newest one is returned.",
         )
 
@@ -3042,7 +3078,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(form_info['inputs'], {'token': 't1'})
 
         # The customer pays; the return route and then the cron complete the new transaction.
-        url = self._build_url(EpaysController._return_url)
+        url = self._build_url(f'{EpaysController._return_url}/sandbox')
         with self._patch_payment_details(self._payment_data(tx)), \
                 mute_logger(CONTROLLER_LOGGER, TX_LOGGER, PAYMENT_TX_LOGGER):
             response = self.opener.get(

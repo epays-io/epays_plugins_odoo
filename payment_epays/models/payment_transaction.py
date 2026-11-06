@@ -420,8 +420,8 @@ class PaymentTransaction(models.Model):
                 )
             raise
 
-        payment_id = payment_data.get('paymentId')
-        redirect_url = payment_data.get('redirect')
+        details = epays_utils.read_payment(payment_data)
+        payment_id, redirect_url = details['payment_id'], details['redirect_url']
         if not payment_id or not self._epays_is_valid_redirect_url(redirect_url, environment):
             # Not the response: its link is a bearer link, and it holds the customer's data.
             _logger.warning(
@@ -646,9 +646,7 @@ class PaymentTransaction(models.Model):
             return {}
         # The page and every message about the payment are in the language it was opened in, which
         # a server may not report (no `paymentLang`), and an attempt from an older version not hold.
-        page_lang = payment_data.get('paymentLang')
-        if page_lang not in ('en', 'ar'):
-            page_lang = candidate.epays_lang
+        page_lang = epays_utils.read_payment(payment_data)['page_lang'] or candidate.epays_lang
         return {
             'amount_changed': bool(self._epays_get_amount_mismatches(payment_data)),
             # A page opened for one gateway (e.g. Card) shows that gateway only.
@@ -981,10 +979,11 @@ class PaymentTransaction(models.Model):
         :return: `en` or `ar`.
         :rtype: str
         """
-        payment_lang = payment_data.get('paymentLang')
-        if payment_lang in ('en', 'ar'):
-            return payment_lang
-        return self.epays_lang or self._epays_get_lang()
+        return (
+            epays_utils.read_payment(payment_data)['page_lang']
+            or self.epays_lang
+            or self._epays_get_lang()
+        )
 
     def _epays_compose_customer_message(self, outcome, payment_data=None, lang='en'):
         """ Compose a message for the customer, in the language of the context, with ePays's decline
@@ -1035,7 +1034,7 @@ class PaymentTransaction(models.Model):
         if outcome == 'cancelled':
             what_happened = _("Your payment was cancelled.")
         else:
-            reason = self._epays_get_response_description(payment_data or {}, lang=lang)
+            reason = epays_utils.get_response_description(payment_data or {}, lang=lang)
             if reason:
                 what_happened = _("Your payment was declined: %s.", reason.rstrip('. '))
             else:
@@ -1160,21 +1159,22 @@ class PaymentTransaction(models.Model):
         if provider_code != 'epays' or len(tx) == 1:
             return tx
 
-        payment_id = notification_data.get('paymentId')
+        payment_id = epays_utils.get_notified_payment_id(notification_data)
         if not isinstance(payment_id, str) or not PAYMENT_ID_RE.match(payment_id.strip()):
             raise ValidationError("ePays: " + _("Received data with missing payment id."))
         no_match_message = "ePays: " + _(
             "No transaction found matching payment id %s.", payment_id
         )
-        domain = [('provider_reference', '=', payment_id.strip()), ('provider_code', '=', 'epays')]
         # Sandbox and production number their payments independently: the return URL of a payment
-        # names its environment. Payments started before it did are looked up by id alone.
+        # has named its environment since the first public version.
         environment = notification_data.get(const.NOTIFICATION_ENVIRONMENT_KEY)
-        if environment:
-            if environment not in dict(const.ENVIRONMENTS):
-                raise ValidationError(no_match_message)
-            domain.append(('epays_environment', '=', environment))
-        txs = self.search(domain, order='id desc')
+        if environment not in dict(const.ENVIRONMENTS):
+            raise ValidationError(no_match_message)
+        txs = self.search([
+            ('provider_reference', '=', payment_id.strip()),
+            ('provider_code', '=', 'epays'),
+            ('epays_environment', '=', environment),
+        ], order='id desc')
         # ePays can return the payment of an earlier, never opened attempt on the same documents;
         # that attempt was then cancelled and replaced by the newest transaction.
         tx = txs.filtered(lambda t: t.state != 'cancel')[:1] or txs[:1]
@@ -1465,7 +1465,7 @@ class PaymentTransaction(models.Model):
             return self.env['payment.transaction']
 
         self._epays_update_payment_method(
-            epays_utils.get_first(payment_data, 'subscriptionId', 'gatewayId')
+            epays_utils.read_payment(payment_data)['subscription_id']
         )
 
         updated_txs = self._epays_apply_target_state(target_state, status, payment_data)
@@ -1566,14 +1566,12 @@ class PaymentTransaction(models.Model):
         mismatches = self._epays_get_mismatches(payment_data)
         if mismatches:
             # Only the compared values are logged: the details hold the customer's data.
-            custom_fields = payment_data.get('customFields')
-            custom_fields = custom_fields if isinstance(custom_fields, dict) else {}
+            details = epays_utils.read_payment(payment_data)
             _logger.warning(
                 "the payment details received from ePays for transaction %s do not match it (%s): "
                 "ePays has %s %s, udf2 %r, udf3 %r; the transaction has %s %s, udf2 %r, udf3 %r",
                 self.reference, ', '.join(mismatches),
-                payment_data.get('amount'), payment_data.get('currency'),
-                custom_fields.get('udf2'), custom_fields.get('udf3'),
+                details['amount'], details['currency'], details['udf2'], details['udf3'],
                 self.amount, self.currency_id.name, self.epays_udf2, self.epays_udf3,
             )
             return self._epays_hold_payment(payment_data)
@@ -1821,32 +1819,16 @@ class PaymentTransaction(models.Model):
         charged_amount = self.currency_id._convert(amount, charged_currency, self.company_id, date)
         return charged_amount, charged_currency, exchange_rate
 
-    @api.model
-    def _epays_get_response_description(self, payment_data, lang='en'):
-        """ Return the response description in the given language, falling back to the other one.
-
-        :param dict payment_data: The `data` of the v2 payment details.
-        :param str lang: `en` or `ar`.
-        :return: The description, or an empty string.
-        :rtype: str
-        """
-        description = payment_data.get('responseDescription')
-        if isinstance(description, dict):
-            other_lang = 'ar' if lang == 'en' else 'en'
-            text = description.get(lang) or description.get(other_lang)
-        else:
-            text = description
-        return str(text).strip() if text else ''
-
     def _epays_store_payment_details(self, payment_data):
         """ Store the payment details received from ePays on the transaction. """
-        gateway_response = payment_data.get('gatewayResponse')
+        details = epays_utils.read_payment(payment_data)
+        gateway_response = details['gateway_response']
         values = {
-            'epays_transaction_id': payment_data.get('transactionId'),
-            'epays_gateway_reference': payment_data.get('gatewayReference'),
-            'epays_response_code': payment_data.get('responseCode'),
-            'epays_response_desc': self._epays_get_response_description(payment_data),
-            'epays_gateway_id': epays_utils.get_first(payment_data, 'subscriptionId', 'gatewayId'),
+            'epays_transaction_id': details['transaction_id'],
+            'epays_gateway_reference': details['gateway_reference'],
+            'epays_response_code': details['response_code'],
+            'epays_response_desc': epays_utils.get_response_description(payment_data),
+            'epays_gateway_id': details['subscription_id'],
             'epays_gateway_response': json.dumps(
                 gateway_response, ensure_ascii=False, indent=2
             ) if isinstance(gateway_response, dict) else None,
@@ -1863,27 +1845,27 @@ class PaymentTransaction(models.Model):
         :param dict payment_data: The `data` of the v2 payment details.
         :return: None
         """
-        status = payment_data.get('status')
+        details = epays_utils.read_payment(payment_data)
+        status, result = details['status'], details['result']
         status = None if epays_utils.is_empty(status) else epays_utils.humanize_status(status)
-        result = payment_data.get('result')
         if status and not epays_utils.is_empty(result) \
                 and status.lower() != str(result).strip().lower():
             result_text = f'{status} ({result})'
         else:
             result_text = status or result
-        amount = payment_data.get('amount')
+        amount = details['amount']
         rows = [
             (_("Result"), result_text),
-            (_("ePays Payment ID"), payment_data.get('paymentId') or self.provider_reference),
-            (_("Amount"), f"{amount} {payment_data.get('currency') or ''}".strip()
+            (_("ePays Payment ID"), details['payment_id'] or self.provider_reference),
+            (_("Amount"), f"{amount} {details['currency'] or ''}".strip()
                 if not epays_utils.is_empty(amount) else None),
             *self._epays_get_conversion_note_rows(),
-            (_("Gateway Reference"), payment_data.get('gatewayReference')),
-            (_("Transaction ID"), payment_data.get('transactionId')),
-            (_("Response Code"), payment_data.get('responseCode')),
-            (_("Response Description"), self._epays_get_response_description(payment_data)),
-            (_("Created At"), payment_data.get('createdAt')),
-            (_("Paid At"), epays_utils.get_first(payment_data, 'completedAt', 'paidAt')),
+            (_("Gateway Reference"), details['gateway_reference']),
+            (_("Transaction ID"), details['transaction_id']),
+            (_("Response Code"), details['response_code']),
+            (_("Response Description"), epays_utils.get_response_description(payment_data)),
+            (_("Created At"), details['created_at']),
+            (_("Paid At"), details['completed_at']),
         ]
         items = Markup('').join(
             Markup('<li>%s: %s</li>') % (label, epays_utils.format_value(value))
@@ -1892,7 +1874,7 @@ class PaymentTransaction(models.Model):
         body = Markup('<p><strong>%s</strong></p><ul>%s</ul>') % (
             _("ePays payment details for transaction %s", self.reference), items
         )
-        gateway_lines = epays_utils.get_gateway_response_lines(payment_data.get('gatewayResponse'))
+        gateway_lines = epays_utils.get_gateway_response_lines(details['gateway_response'])
         if gateway_lines:
             body += Markup('<hr/><ul>%s</ul>') % Markup('').join(
                 Markup('<li>%s: %s</li>') % (label, value) for label, value in gateway_lines
@@ -2013,11 +1995,7 @@ class PaymentTransaction(models.Model):
                 return
             void_data = self._epays_void()
             if void_data is not None:
-                payment_data = dict(payment_data, **{
-                    key: value for key, value in void_data.items()
-                    if not epays_utils.is_empty(value)
-                })
-                payment_data['status'] = 'Voided'
+                payment_data = epays_utils.apply_void(payment_data, void_data)
             else:  # The void was refused: the payment may have moved on meanwhile.
                 payment_data = self._epays_fetch_payment_details()
                 target_state, _status = epays_utils.get_payment_state(payment_data)
@@ -2209,7 +2187,9 @@ class PaymentTransaction(models.Model):
             )
             return False
         self._epays_record_at_bank(payment_data)
-        response_code = str(payment_data.get('responseCode') or '').strip()
+        response_code = str(
+            epays_utils.read_payment(payment_data)['response_code'] or ''
+        ).strip()
         return (
             epays_utils.get_payment_state(payment_data)[0] in ('error', 'cancel')
             and response_code != const.APPROVED_RESPONSE_CODE

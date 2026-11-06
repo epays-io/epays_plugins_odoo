@@ -57,8 +57,8 @@ early for other providers.
      amount/currency/rate and rate source, and the `udf2`/`udf3` custom fields, then redirects. It first reads every live
      attempt on the same documents, reuses the newest if it can and voids the others, a declined
      one too (`_epays_find_live_attempts`: one live payment per order).
-  2. ePays returns to `/payment/epays/return[/<environment>]?paymentId=…` (controller). The
-     transaction is found **only by stored paymentId (+ environment)**, never by data from the
+  2. ePays returns to `/payment/epays/return/<environment>?paymentId=…` (controller). The
+     transaction is found **only by stored paymentId and environment**, never by data from the
      notification, and the status is always pulled with `GET /api/v2/Payments/{id}`.
   3. `_epays_apply_payment_details` maps status via `const.PAYMENT_STATUS_MAPPING`; `done` requires
      amount/currency/udf fields to match (`_epays_get_mismatches`), otherwise error.
@@ -148,7 +148,8 @@ early for other providers.
 - **ePays renames v2 fields.** On 2026-10-18 `gatewayId`/`merchantGateway` became `subscriptionId`,
   the gateway type `gatewayId` became `gatewayTypeId`, `paidAt` became `completedAt`, and statuses
   went snake case. Servers update at different times, so read new and old names with
-  `epays_utils.get_first(data, new, old)`, send both in requests (ePays ignores unknown fields), and
+  `epays_utils.get_first(data, new, old)` in `utils.py`, the only place that knows ePays's field names
+  (`read_payment`, `read_gateway`), send both in requests (ePays ignores unknown fields), and
   compare statuses case-insensitively. ePays ignores unknown request fields silently: a rename
   breaks features without an error, so check eCore's DTOs when it changes.
 

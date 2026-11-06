@@ -38,6 +38,10 @@ class EpaysApiError(ValidationError):
     def reason(self):
         return self.details.get('reason') or ''
 
+    @property
+    def observed_ip(self):
+        return self.details.get('observedIp')
+
 
 def join_references(names, max_length=const.UDF_MAX_LENGTH):
     """ Join references with commas, cutting the list at a whole reference if it is too long.
@@ -64,6 +68,120 @@ def join_references(names, max_length=const.UDF_MAX_LENGTH):
     if not kept:  # Not even the first reference fits: cut it.
         return names[0][:max_length - len(const.UDF_ELLIPSIS)] + const.UDF_ELLIPSIS
     return kept + suffix
+
+
+def read_payment(data):
+    """ Return the fields of an ePays payment under the addon's own names, the new one of a renamed
+    field first (see `get_first`).
+
+    This module is the only place that knows what ePays calls a field: a rename changes it alone.
+
+    :param dict data: A payment, as the `data` of the v2 payment details or as a listed item.
+    :return: The fields; `page_lang` is `None` unless ePays reports `en` or `ar`.
+    :rtype: dict
+    """
+    custom_fields = data.get('customFields')
+    custom_fields = custom_fields if isinstance(custom_fields, dict) else {}
+    page_lang = data.get('paymentLang')
+    return {
+        'payment_id': data.get('paymentId'),
+        'redirect_url': data.get('redirect'),
+        'amount': data.get('amount'),
+        'currency': data.get('currency'),
+        'status': data.get('status'),
+        'result': data.get('result'),
+        'transaction_id': data.get('transactionId'),
+        'gateway_reference': data.get('gatewayReference'),
+        'response_code': data.get('responseCode'),
+        'subscription_id': get_first(data, 'subscriptionId', 'gatewayId'),
+        'gateway_response': data.get('gatewayResponse'),
+        'created_at': data.get('createdAt'),
+        'completed_at': get_first(data, 'completedAt', 'paidAt'),
+        'page_lang': page_lang if page_lang in ('en', 'ar') else None,
+        'udf2': custom_fields.get('udf2'),
+        'udf3': custom_fields.get('udf3'),
+        'listed_udf2': data.get('udf2'),
+    }
+
+
+def read_payment_list(data):
+    """ Return the payments of `GET /api/v2/Payments`. """
+    payments = data.get('payments')
+    return [payment for payment in payments if isinstance(payment, dict)] \
+        if isinstance(payments, list) else []
+
+
+def read_gateway(gateway):
+    """ Return the fields of a gateway of `GET /api/v2/gateways` under the addon's own names.
+
+    :param dict gateway: A gateway of the response.
+    :return: The fields, as trimmed strings, except `type_id`, which ePays may send as a number.
+    :rtype: dict
+    """
+    return {
+        'ref': str(get_first(gateway, 'subscriptionId', 'merchantGateway') or '').strip(),
+        'type_id': get_first(gateway, 'gatewayTypeId', 'gatewayId'),
+        'name': str(gateway.get('gatewayName') or '').strip(),
+        'class': str(gateway.get('gatewayClass') or '').strip(),
+        'status': str(gateway.get('status') or '').strip(),
+    }
+
+
+def read_gateway_page(data):
+    """ Return a page of `GET /api/v2/gateways`.
+
+    :param dict data: The `data` of the response.
+    :return: The gateways, and the cursor of the next page, if any.
+    :rtype: tuple[list, str|None]
+    """
+    gateways, cursor = data.get('gateways'), data.get('nextCursor')
+    return (
+        gateways if isinstance(gateways, list) else [],
+        cursor if cursor and isinstance(cursor, str) else None,
+    )
+
+
+def read_api_data(body):
+    """ Return the `data` of a successful response envelope, or an empty dict. """
+    data = body.get('data')
+    return data if isinstance(data, dict) else {}
+
+
+def get_notified_payment_id(notification_data):
+    """ Return the payment id of a return or a notification from ePays, as it was received. """
+    return notification_data.get('paymentId')
+
+
+def get_response_description(payment_data, lang='en'):
+    """ Return the response description in the given language, falling back to the other one.
+
+    :param dict payment_data: The `data` of the v2 payment details.
+    :param str lang: `en` or `ar`.
+    :return: The description, or an empty string.
+    :rtype: str
+    """
+    description = payment_data.get('responseDescription')
+    if isinstance(description, dict):
+        other_lang = 'ar' if lang == 'en' else 'en'
+        text = description.get(lang) or description.get(other_lang)
+    else:
+        text = description
+    return str(text).strip() if text else ''
+
+
+def apply_void(payment_data, void_data):
+    """ Return the payment details once ePays voided the payment.
+
+    :param dict payment_data: The `data` of the v2 payment details, read before the void.
+    :param dict void_data: The `data` of the response to the void.
+    :return: The details, with the status of a voided payment.
+    :rtype: dict
+    """
+    voided = dict(payment_data, **{
+        key: value for key, value in void_data.items() if not is_empty(value)
+    })
+    voided['status'] = 'Voided'
+    return voided
 
 
 def get_payment_state(payment_data):
@@ -226,14 +344,19 @@ def get_api_failure(is_ok, body):
 
     :param bool is_ok: Whether the HTTP status is a success.
     :param body: The parsed body of the response, or `None` if it was not JSON.
-    :return: The `error` object, empty if ePays sent none, or `None` if the request succeeded.
+    :return: What ePays said, as arguments of `EpaysApiError`, or `None` if the request succeeded.
     :rtype: dict|None
     """
     is_object = isinstance(body, dict)
     if is_ok and is_object and str(body.get('status', '')).upper() != 'ERROR':
         return None
     error = body.get('error') if is_object else None
-    return error if isinstance(error, dict) else {}
+    error = error if isinstance(error, dict) else {}
+    return {
+        'error_code': error.get('code'),
+        'error_message': error.get('message'),
+        'details': error.get('details'),
+    }
 
 
 def to_minor_units(amount, decimals):

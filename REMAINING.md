@@ -1,7 +1,7 @@
 # ePays for Odoo — what is left
 
 Status on 2026-11-06. The addon (`payment_epays` 18.0.1.0.8, not yet on the store) is
-feature-complete and tested: 243 tests with sales and accounting, 201 with the module alone, lint
+feature-complete and tested: 245 tests with sales and accounting, 203 with the module alone, lint
 clean, upgraded from 18.0.1.0.7. 18.0.1.0.8 fixes what the audit against `PLUGIN_CHECKLIST.md`
 found: a held charge is never applied, also after its release, failed reads count towards the
 public limit, and more. Not run end to end yet. 18.0.1.0.7 aligns it with the WooCommerce plugin (see *Parity* in
@@ -21,6 +21,9 @@ methods.
 
 ## 1. Tests still to do
 
+- [ ] **18.0.1.0.8 end to end** on the local ePays API: the 12 items of Part 4 in `CHECKLIST_ODOO.md`,
+      once the WooCommerce end-to-end run frees the machine.
+- [ ] **18.0.1.0.8 on real gateways** with sandbox credentials and real devices: the 6 items below it.
 - [ ] A **real card payment** typed into the ePays page in a browser, up to the confirmed order and
       the posted payment. So far the gateway sessions were started, not completed with a card.
 - [ ] **Benefit** and **BenefitPay** with test credentials.
@@ -123,8 +126,11 @@ To do once its end-to-end run is over (`epays-woocommerce`, not changed by the a
       divide. Odoo now does it for that line alone, as section 3.5 says.
 - [ ] **Test names:** Odoo's main test of each scenario is now `test_s<N>_…`. Its tests mirrored
       these names.
+- [ ] **Field names:** compare with Odoo's `read_payment`: section 3.1 asks for one place.
 
 ## 7. Confirm with ePays
+
+Asked in the handover page; the release does not wait for the answers.
 
 - [ ] The terms and privacy URLs in the listing, `https://epays.io/terms` and `https://epays.io/privacy`,
       are the ones in the WooCommerce readme: the site answers every path with the same page.

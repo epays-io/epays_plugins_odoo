@@ -734,22 +734,17 @@ class PaymentProvider(models.Model):
             # The code is enough for the log: an error can repeat what the request held.
             _logger.warning(
                 "invalid API request at %s (HTTP %s): %s", url, response.status_code,
-                failure.get('code') or '-',
+                failure['error_code'] or '-',
             )
             _logger.debug(
                 "response:\n%s",
                 pprint.pformat(body if isinstance(body, dict) else response.text[:1000]),
             )
             raise EpaysApiError(
-                generic_message,
-                http_status=response.status_code,
-                error_code=failure.get('code'),
-                error_message=failure.get('message'),
-                details=failure.get('details'),
+                generic_message, http_status=response.status_code, **failure
             )
 
-        data = body.get('data')
-        data = data if isinstance(data, dict) else {}
+        data = epays_utils.read_api_data(body)
         _logger.info("response received from %s (HTTP %s)", url, response.status_code)
         _logger.debug("response data:\n%s", pprint.pformat(data))
         return data
@@ -878,7 +873,7 @@ class PaymentProvider(models.Model):
         """ Return the IP address ePays saw, when it refused it (X004), if valid. """
         if error.http_status != 401 or error.reason != const.AUTH_REASON_INVALID_IP:
             return None
-        return _to_ip_address(error.details.get('observedIp'))
+        return _to_ip_address(error.observed_ip)
 
     def _epays_record_server_ip(self, error):
         """ Keep the IP address ePays refused, so that the admin can copy it from the form. """
@@ -983,10 +978,9 @@ class PaymentProvider(models.Model):
                 'GET', f'{const.GATEWAYS_PATH}?{urlencode(query)}',
                 environment=environment, domain=domain,
             )
-            page = data.get('gateways')
-            gateways.extend(page if isinstance(page, list) else [])
-            query['cursor'] = data.get('nextCursor')
-            if not query['cursor'] or not isinstance(query['cursor'], str):
+            page, query['cursor'] = epays_utils.read_gateway_page(data)
+            gateways.extend(page)
+            if not query['cursor']:
                 break
         return gateways
 
@@ -999,10 +993,7 @@ class PaymentProvider(models.Model):
                  2026-10-18.
         :rtype: str
         """
-        if not isinstance(gateway, dict):
-            return ''
-        gateway_ref = epays_utils.get_first(gateway, 'subscriptionId', 'merchantGateway')
-        return str(gateway_ref or '').strip()
+        return epays_utils.read_gateway(gateway)['ref'] if isinstance(gateway, dict) else ''
 
     def _epays_update_gateways(self, environment, gateways):
         """ Upsert the gateway rows of an environment from the list returned by ePays.
@@ -1032,14 +1023,15 @@ class PaymentProvider(models.Model):
             gateway_ref = self._epays_get_gateway_ref(gateway)
             if not gateway_ref or gateway_ref in kept_rows.mapped('gateway_ref'):
                 continue
-            gateway_type_id = _to_int(epays_utils.get_first(gateway, 'gatewayTypeId', 'gatewayId'))
+            details = epays_utils.read_gateway(gateway)
+            gateway_type_id = _to_int(details['type_id'])
             if gateway_type_id in const.NON_CHECKOUT_GATEWAY_TYPES:
                 continue  # An integration, not a checkout payment method.
             values = {
                 'gateway_type_id': gateway_type_id,
-                'name': str(gateway.get('gatewayName') or '').strip() or gateway_ref,
-                'gateway_class': str(gateway.get('gatewayClass') or '').strip(),
-                'status': str(gateway.get('status') or '').strip(),
+                'name': details['name'] or gateway_ref,
+                'gateway_class': details['class'],
+                'status': details['status'],
             }
             default_method = methods_by_code.get(
                 const.GATEWAY_TYPE_PAYMENT_METHOD_CODES.get(gateway_type_id)
@@ -1093,10 +1085,9 @@ class PaymentProvider(models.Model):
                 return _("the ePays licence does not list the domain %s. Ask ePays to register it, "
                          "or set the Merchant Domain to the registered one.", domain or '-')
             if reason == const.AUTH_REASON_INVALID_IP:
-                observed_ip = error.details.get('observedIp')
-                if observed_ip:
+                if error.observed_ip:
                     return _("the ePays licence does not allow the IP address of this Odoo server "
-                             "(%s). Ask ePays to register this IP address.", observed_ip)
+                             "(%s). Ask ePays to register this IP address.", error.observed_ip)
                 return _("the ePays licence does not allow the IP address of this Odoo server. "
                          "Ask ePays to register the public IP address of the server.")
             if reason == const.AUTH_REASON_MISSING_LICENSE:

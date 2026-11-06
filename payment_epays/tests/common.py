@@ -6,6 +6,7 @@ from unittest.mock import patch
 from odoo import fields
 
 from odoo.addons.payment.tests.common import PaymentCommon
+from odoo.addons.payment_epays import const
 from odoo.addons.payment_epays.models.payment_transaction import PAYMENT_READS
 
 MAKE_REQUEST_PATH = (
@@ -114,6 +115,13 @@ class EpaysCommon(PaymentCommon):
         self.env.flush_all()
         self.env.cr.postcommit.run()
         self.env.invalidate_all()
+
+    def _notification_data(self, tx):
+        """ Return what the return route passes on for the payment of a transaction. """
+        return {
+            'paymentId': tx.provider_reference,
+            const.NOTIFICATION_ENVIRONMENT_KEY: tx.epays_environment,
+        }
 
     def _new_reference(self, prefix='EPAYS-TX'):
         type(self)._reference_counter += 1

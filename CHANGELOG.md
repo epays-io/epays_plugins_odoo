@@ -27,7 +27,8 @@ Security and privacy:
 - ePays is not offered at checkout without credentials the mode can use, such as an unreadable key.
 - The payment link, full error responses and the notification data no longer reach the log above
   DEBUG level.
-- A return URL naming an unknown environment is refused without a lookup.
+- A return URL must name a known environment, or it is refused without a lookup. Every public
+  version has named it, so only payments from before 18.0.1.0.3 are affected.
 
 Customers and staff:
 
@@ -36,6 +37,10 @@ Customers and staff:
   administrators.
 - The transaction shows the page language, the exchange rate source, and whether a charge was refused
   or needs a review.
+
+Code:
+
+- `utils.py` is the only place that reads ePays field names, so a rename changes one file.
 
 ## 18.0.1.0.7
 

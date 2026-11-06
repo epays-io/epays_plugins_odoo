@@ -116,16 +116,14 @@ class PaymentEpaysUnansweredRequest(models.Model):
             'GET', f'{const.PAYMENTS_PATH}?{query}',
             environment=self.environment, domain=self.merchant_domain,
         )
-        payments = data.get('payments')
         now = datetime.now(timezone.utc)
-        for payment in payments if isinstance(payments, list) else []:
-            if not isinstance(payment, dict):
-                continue
-            payment_id = str(payment.get('paymentId') or '').strip()
-            created_at = epays_utils.parse_datetime(payment.get('createdAt'))
+        for payment in epays_utils.read_payment_list(data):
+            details = epays_utils.read_payment(payment)
+            payment_id = str(details['payment_id'] or '').strip()
+            created_at = epays_utils.parse_datetime(details['created_at'])
             is_orphan_candidate = (
                 payment_id
-                and str(payment.get('udf2') or '').strip() == self.udf2
+                and str(details['listed_udf2'] or '').strip() == self.udf2
                 and epays_utils.get_payment_state(payment)[0] == 'pending'
                 and created_at
                 and now - created_at >= const.UNANSWERED_REQUEST_MIN_AGE

@@ -216,8 +216,7 @@ Read from `error.details.reason`, and turn each into a clear message for the adm
 
 - [x] One constants file holds every protocol value and tunable.
 - [x] One class or method is the **only** HTTP entry point, so tests can mock it.
-- [ ] One place reads ePays field names.
-      *Open: `get_first` handles renames, but `utils.py` and `payment_transaction.py` both read raw fields. Moving them means a details wrapper through the money code: not worth doing without a reason.*
+- [x] One place reads ePays field names.
 - [x] One place holds every customer message.
 - [x] The HTTP layer, status mapping, mismatch check, amounts and order lines are pure code with unit
       tests.
@@ -339,8 +338,7 @@ Read from `error.details.reason`, and turn each into a clear message for the adm
 
 - [x] One route for the browser return and the ePays notification, accepting GET and POST.
 - [x] A malformed payment id is rejected with no lookup. The environment comes from a fixed list.
-- [ ] The document is found **only** by stored payment id plus environment.
-      *Open: Exception: a return URL with no environment, from a payment made before URLs named it, is looked up by id alone. ePays can resend those at any age, so the fallback stays. A URL naming an unknown environment is refused.*
+- [x] The document is found **only** by stored payment id plus environment.
 - [x] The status always comes from `GET /api/v2/Payments/{id}`.
 - [x] The redirect target comes from the document, never from the request.
 - [x] Neither depends on a session or cookie. A cross-site return can arrive without one, and a server
