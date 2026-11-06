@@ -555,6 +555,11 @@ msgid "Result"
 msgstr "النتيجة"
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_review_releasable
+msgid "Review Can Be Released"
+msgstr "يمكن إنهاء المراجعة"
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_udf2
 msgid "Sales Orders Sent (udf2)"
 msgstr "أوامر البيع المرسلة (udf2)"

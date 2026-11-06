@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0-20260908\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 06:23+0000\n"
-"PO-Revision-Date: 2026-11-05 06:23+0000\n"
+"POT-Creation-Date: 2026-11-06 04:19+0000\n"
+"PO-Revision-Date: 2026-11-06 04:19+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -528,6 +528,11 @@ msgid "Result"
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_review_releasable
+msgid "Review Can Be Released"
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_udf2
 msgid "Sales Orders Sent (udf2)"
 msgstr ""
@@ -762,8 +767,8 @@ msgstr ""
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_watch_until
 msgid ""
-"The scheduled check reads this payment until then, as ePays can still "
-"charge it."
+"The scheduled check reads this payment until then, as ePays can still charge"
+" it."
 msgstr ""
 
 #. module: payment_epays

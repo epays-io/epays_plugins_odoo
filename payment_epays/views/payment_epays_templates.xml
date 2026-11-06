@@ -18,12 +18,12 @@
         </xpath>
     </template>
 
-    <!-- A cancelled payment with the gateway can still take the money: that customer waits for the
-         bank's answer, and must not read that the payment was cancelled. -->
+    <!-- A cancelled or declined payment with the gateway can still take the money: that customer
+         waits for the bank's answer, and must not read that the payment failed. -->
     <template id="state_header" inherit_id="payment.state_header">
         <xpath expr="//t[@t-if='is_html_empty(status_message)']" position="before">
             <t t-set="epays_waits_for_bank"
-               t-value="tx.provider_code == 'epays' and tx.state == 'cancel' and tx.epays_at_bank"/>
+               t-value="tx.provider_code == 'epays' and tx.state in ('cancel', 'error') and tx.epays_at_bank"/>
             <t t-if="epays_waits_for_bank">
                 <t t-set="alert_style" t-value="'info'"/>
                 <t t-set="status_heading" t-value="waiting_heading"/>

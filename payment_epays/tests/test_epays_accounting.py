@@ -581,6 +581,128 @@ if AccountPaymentCommon is not None:
             self.assertTrue(at_bank.epays_at_bank)
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_the_cron_voids_the_link_left_open_on_an_invoice_paid_another_way(self):
+            """ S7: nobody else reads it, and a customer could still pay it. """
+            invoice = self.init_invoice(
+                'out_invoice', partner=self.partner, amounts=[100.0], post=True,
+                currency=self.currency,
+            )
+            tx = self._create_epays_transaction(
+                state='draft', amount=invoice.amount_total, invoice_ids=[Command.set(invoice.ids)],
+            )
+            self.env['account.payment.register'].with_context(
+                active_model='account.move', active_ids=invoice.ids,
+            ).create({})._create_payments()
+            self._set_create_date(tx, fields.Datetime.now() - timedelta(minutes=10))
+            data = self._payment_data(tx, status='Pending', result='', transactionId=None)
+            calls = []
+            with self._patch_make_request(self._recording_handler(calls, data)):
+                self._run_cron()
+            self.assertIn('DELETE', calls)
+            self.assertEqual(tx.state, 'cancel')
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_the_cron_voids_the_link_left_open_on_a_held_order(self):
+            """ S12: the void after the refusal can fail, and it runs once. """
+            self.ensure_installed('sale')
+            _order, (held, left_open) = self._order_and_attempts('cancel', 'draft')
+            self._notify(held, amount='1.000')
+            self.assertTrue(held.epays_review_needed)
+            self._set_create_date(left_open, fields.Datetime.now() - timedelta(minutes=10))
+            data = self._payment_data(left_open, status='Pending', result='', transactionId=None)
+            calls = []
+            with self._patch_make_request(self._recording_handler(calls, data)):
+                self._run_cron()
+            self.assertIn('DELETE', calls)
+            self.assertEqual(left_open.state, 'cancel')
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_later_refusal_holds_a_released_order_again(self):
+            """ A release answers one refusal. """
+            self.ensure_installed('sale')
+            _order, (first, second) = self._order_and_attempts('cancel', 'cancel')
+            self._notify(first, amount='1.000')
+            first.action_epays_release_review()
+            self._notify(second, amount='1.000')
+            self.assertTrue(second.epays_review_needed)
+            new_tx = self._create_epays_transaction(
+                state='draft', amount=second.amount,
+                sale_order_ids=[Command.set(second.sale_order_ids.ids)],
+            )
+            with self.assertRaises(ValidationError):
+                new_tx._epays_check_replaced_payments()
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_released_order_reads_its_other_payments_before_a_new_one(self):
+            """ S2: only the money already refused was reviewed. """
+            self.ensure_installed('sale')
+            order, (held, replaced) = self._order_and_attempts('cancel', 'cancel')
+            self._notify(held, amount='1.000')
+            held.action_epays_release_review()
+            new_tx = self._create_epays_transaction(
+                state='draft', amount=replaced.amount, sale_order_ids=[Command.set(order.ids)],
+            )
+            data = self._payment_data(
+                replaced, status='Pending', result='', transactionId=None, inFlight=True
+            )
+            with self._patch_payment_details(data), self.assertRaises(ValidationError) as error:
+                new_tx._epays_check_replaced_payments()
+            self.assertIn("still being confirmed", error.exception.args[0])
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_cancelled_order_offers_no_release(self):
+            """ The merchant has decided: there is nothing left to allow a payment for. """
+            self.ensure_installed('sale')
+            order, (held,) = self._order_and_attempts('cancel')
+            self._notify(held, amount='1.000')
+            self.assertTrue(held.epays_review_releasable)
+            order._action_cancel()
+            held.invalidate_recordset(['epays_review_releasable'])
+            self.assertFalse(held.epays_review_releasable)
+            held.action_epays_release_review()
+            self.assertTrue(held.epays_review_needed)
+            order.action_draft()
+            held.invalidate_recordset(['epays_review_releasable'])
+            self.assertTrue(held.epays_review_releasable, "The order was reopened.")
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_a_completed_payment_on_a_refunded_invoice_is_reported(self):
+            """ S13: the customer got the money back, and this charge is not what was refunded. """
+            invoice = self.init_invoice(
+                'out_invoice', partner=self.partner, amounts=[100.0], post=True,
+                currency=self.currency,
+            )
+            tx = self._create_epays_transaction(
+                state='cancel', amount=invoice.amount_total, invoice_ids=[Command.set(invoice.ids)],
+            )
+            self.env['account.payment.register'].with_context(
+                active_model='account.move', active_ids=invoice.ids,
+            ).create({})._create_payments()
+            invoice._reverse_moves().action_post()
+            self._notify(tx)
+            self.assertTrue(tx._epays_is_refused())
+            self.assertTrue(self._notes(invoice, 'refund it on ePays'))
+
+        def test_a_total_changed_by_less_than_a_fils_is_the_same_charge(self):
+            """ S15: ePays charges in fils, and a cent of a weak currency is less than one. """
+            self.ensure_installed('sale')
+            _order, (tx,) = self._order_and_attempts('draft')
+            bhd = self.env.ref('base.BHD')
+            tx.write({
+                'amount': 1000.0,
+                'epays_charged_currency_id': bhd.id,
+                'epays_charged_amount': 4.0,
+                'epays_exchange_rate': 0.004,
+            })
+            for is_late in (False, True):
+                with self.subTest(is_late=is_late), patch.object(
+                    type(tx), '_epays_get_amount_due', return_value=999.99,
+                ):
+                    self.assertTrue(tx._epays_fits_amount_due(is_late))
+            with patch.object(type(tx), '_epays_get_amount_due', return_value=999.0):
+                self.assertFalse(tx._epays_fits_amount_due(False), "A whole fils is a change.")
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
         def test_a_charge_above_what_is_due_is_refused_even_on_time(self):
             """ S15: the order was changed after the payment was created. """
             self.ensure_installed('sale')
