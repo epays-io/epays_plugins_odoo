@@ -44,7 +44,7 @@ follow this checklist where they differ from it, as in the known gap below.
 
 | Integration | Repository | Version | State on 2026-11-06 |
 |---|---|---|---|
-| Odoo 18 addon | `epays-io/epays_plugins_odoo` | 18.0.1.0.7 | On `18.0`, the branch the Odoo Apps Store scans |
+| Odoo 18 addon | `epays-io/epays_plugins_odoo` | 18.0.1.0.8 | On `18.0`, the branch the Odoo Apps Store scans |
 | WooCommerce plugin | `epays-io/epays_plugins_woocommerce` | 1.0.0 | On `release-1.0.0`, not published |
 
 | Topic | Odoo (`payment_epays/`) | WooCommerce (`src/`) |
@@ -307,7 +307,7 @@ Read from `error.details.reason`, and turn each into a clear message for the adm
 
 **Order details**
 
-- [ ] `order` is sent only when the lines plus shipping equal the charged amount **to the fils**. Tabby
+- [ ] `lineItems` is sent only when the lines plus shipping equal the charged amount **to the fils**. Tabby
       recomputes what it charges from them, adding `unitPrice × quantity` plus `shippingAmount`, not tax
       or discount.
 - [ ] `order` also carries `taxAmount`, `shippingAmount` and `discountAmount`.
@@ -392,7 +392,9 @@ Before anything is voided or created, under the document's lock:
 
 - [ ] Every attempt on the document that could still be live is read, the replaced ones included.
 - [ ] Reads come **before** any void: an error can roll the request back, but not a void on ePays.
-- [ ] One at the bank stops the retry: "still being confirmed", no void, no new payment.
+- [ ] One at the bank stops the retry: "still being confirmed", no void, no new payment. The one
+      exception is the newest attempt when it can be reused, as below: nothing is voided, and its
+      link is reused.
 - [ ] One that completed stops the retry: no new payment, the document is settled.
 - [ ] A held document stops the retry, showing its message.
 - [ ] Only the newest attempt can be reused, only with at least 5 minutes left, and only if its amount,
@@ -625,7 +627,7 @@ Each row needs a test named after the scenario, with this outcome. The test name
 
 | # | Scenario | Expected | Test |
 |---|---|---|---|
-| S1 | Retry while the current payment is at the bank and its link is live | Not voided, no new payment, "still being confirmed" | |
+| S1 | Retry while the current payment is at the bank and its link is live | Its link is reused if nothing changed and at least 5 minutes are left; otherwise not voided, no new payment, "still being confirmed" | |
 | S2 | Retry while a replaced payment is at the bank | Same, and nothing is voided first | |
 | S3 | Retry when a replaced payment has completed | No new payment; the order is settled | |
 | S4 | Retry after a decline | Declined link voided before the new payment | |
@@ -644,7 +646,7 @@ Each row needs a test named after the scenario, with this outcome. The test name
 | S17 | Public routes | At most 5 ePays reads a minute per payment attempt; the scheduler and admin action are exempt; malformed ids rejected without a lookup | |
 | S18 | Waiting page | Each poll reads ePays within the limit; a customer whose replaced payment is at the bank keeps waiting | |
 | S19 | Admin status check | Reads the current and all replaced payments, at any age | |
-| S20 | Request content | Same fields; `order` only when lines add up to the fils; description "Order N" in the payment language | |
+| S20 | Request content | Same fields; `lineItems` only when they add up to the fils; description "Order N" in the payment language | |
 | S21 | Master key handling | Encrypted with prefix `epays1:`; refused over plain HTTP; an unreadable key warns the admin and never falls back to another key | |
 | S22 | Admin warnings | Unreadable key, sandbox shown to customers, no exchange rate, rates over 7 days old | |
 | S23 | Gateway sync | Follows `nextCursor`, up to 10 pages | |

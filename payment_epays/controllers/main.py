@@ -40,7 +40,8 @@ class EpaysController(http.Controller):
         :param dict data: The notification data (only `paymentId`).
         :return: The redirection to the payment status page.
         """
-        _logger.info("handling redirection from ePays with data:\n%s", pprint.pformat(data))
+        _logger.info("handling redirection from ePays for payment %.64s", data.get('paymentId'))
+        _logger.debug("notification data:\n%s", pprint.pformat(data))
         if environment:
             data[const.NOTIFICATION_ENVIRONMENT_KEY] = environment
         try:

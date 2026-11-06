@@ -6,7 +6,7 @@ from unittest.mock import patch
 from urllib.parse import urlsplit
 
 from odoo import Command, fields
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, ValidationError
 from odoo.modules.registry import Registry
 from odoo.tests import tagged
 from odoo.tests.common import get_db_name
@@ -115,7 +115,7 @@ if AccountPaymentCommon is not None:
             )
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
-        def test_a_declined_payment_is_acknowledged_but_not_a_refused_one(self):
+        def test_s16_a_declined_payment_is_acknowledged_but_not_a_refused_one(self):
             declined = self._create_epays_transaction()
             refused = self._create_epays_transaction()  # Paid, but not the amount of the order.
             for tx, overrides in [
@@ -190,7 +190,7 @@ if AccountPaymentCommon is not None:
             return calls
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
-        def test_a_voided_payment_charged_late_pays_the_order_and_closes_the_replacement(self):
+        def test_s11_a_voided_payment_charged_late_pays_the_order_and_closes_the_replacement(self):
             """ Voided while the customer was on 3-D Secure, charged by ePays anyway. """
             self.ensure_installed('sale')
             order, (voided, replacement) = self._order_and_attempts('cancel', 'draft')
@@ -228,7 +228,7 @@ if AccountPaymentCommon is not None:
             self.assertEqual(order.state, 'sale')
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
-        def test_a_declined_link_is_closed_once_the_order_is_paid(self):
+        def test_s7_a_declined_link_is_closed_once_the_order_is_paid(self):
             """ ePays lets the customer retry a declined payment on the same link. """
             self.ensure_installed('sale')
             order, (paid, declined) = self._order_and_attempts('draft', 'error')
@@ -239,7 +239,7 @@ if AccountPaymentCommon is not None:
             self.assertEqual(declined.state, 'cancel')
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
-        def test_a_second_charge_is_kept_out_of_the_books_for_the_merchant_to_refund(self):
+        def test_s13_a_second_charge_is_kept_out_of_the_books_for_the_merchant_to_refund(self):
             self.ensure_installed('sale')
             for name, late_state in (('voided', 'cancel'), ('declined, then retried', 'error')):
                 with self.subTest(name):
@@ -461,7 +461,7 @@ if AccountPaymentCommon is not None:
             self.assertEqual(lock_mock.call_args.args[0], first | second)
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
-        def test_a_late_charge_that_no_longer_fits_the_order_is_held_for_the_merchant(self):
+        def test_s12_a_late_charge_that_no_longer_fits_the_order_is_held_for_the_merchant(self):
             """ S12: the first attempt was for a smaller cart, and was charged after all. """
             self.ensure_installed('sale')
             order = self._create_sale_order(confirm=False, currency_id=self.currency.id)
@@ -498,8 +498,136 @@ if AccountPaymentCommon is not None:
             self.assertFalse(held.epays_review_needed)
             self.assertTrue(held._epays_is_refused(), "The charge is still refused.")
 
+        def _held_late_charge(self):
+            """ Return an order and the charge held on it: below what is due, and no longer late
+            in Odoo's eyes, as a refused transaction is in error. """
+            order = self._create_sale_order(confirm=False, currency_id=self.currency.id)
+            total = order.amount_total
+            smaller, _current = (self._create_epays_transaction(
+                state=state, amount=amount, sale_order_ids=[Command.set(order.ids)],
+            ) for state, amount in (('cancel', total / 2), ('draft', total)))
+            self._notify(smaller)
+            self.assertTrue(smaller.epays_review_needed)
+            self.assertEqual(smaller.state, 'error')
+            return order, smaller
+
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
-        def test_a_held_order_keeps_a_payment_at_the_bank(self):
+        def test_s12_a_held_charge_stays_refused_when_it_is_read_again(self):
+            """ ePays resends its notification, and the merchant is not told twice. """
+            order, held = self._held_late_charge()
+            notes = self._notes(order, 'does not match these documents')
+            self._notify(held)
+            self.assertEqual(held.state, 'error')
+            self.assertTrue(held.epays_review_needed)
+            self.assertEqual(self._notes(order, 'does not match these documents'), notes)
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_s12_the_cron_leaves_a_held_charge_refused(self):
+            """ The cron reads a transaction in error until its link expires. """
+            _order, held = self._held_late_charge()
+            self._set_create_date(held, fields.Datetime.now() - timedelta(hours=1))
+            calls = []
+            with patch(REQUESTS_PATH, side_effect=self._fake_api(held, calls)):
+                self._run_cron()
+            self.assertIn(held.provider_reference, calls[0]['url'], "The cron read it.")
+            self.assertEqual(held.state, 'error')
+            self.assertFalse(held.payment_id)
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_s12_a_released_charge_is_never_applied(self):
+            """ The release allows new payments: it does not record the charge. """
+            _order, held = self._held_late_charge()
+            held.action_epays_release_review()
+            self._notify(held)
+            self.assertEqual(held.state, 'error')
+            self.assertFalse(held.epays_review_needed, "It does not block new payments again.")
+
+        def _create_staff(self, *groups):
+            return self.env['res.users'].create({
+                'name': "Staff", 'login': 'epays_staff', 'email': 'staff@example.com',
+                'groups_id': [Command.set([self.env.ref(group).id for group in groups])],
+            })
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_s12_staff_who_manage_the_order_can_release_it(self):
+            self.ensure_installed('sale')
+            _order, held = self._held_late_charge()
+            staff = self._create_staff(
+                'sales_team.group_sale_salesman_all_leads', 'account.group_account_invoice',
+            )
+            held.with_user(staff).action_epays_release_review()
+            self.assertFalse(held.epays_review_needed)
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_s12_staff_who_cannot_edit_the_order_cannot_release_it(self):
+            self.ensure_installed('sale')
+            _order, held = self._held_late_charge()
+            staff = self._create_staff('account.group_account_readonly')
+            with self.assertRaises(AccessError):
+                held.with_user(staff).action_epays_release_review()
+            self.assertTrue(held.epays_review_needed)
+
+        def _assert_merchant_told(self, order, tx, note, logs):
+            """ The note on the document, the warning in the log, and the email to the shop. """
+            self.assertTrue(self._notes(order, note))
+            self.assertTrue([r for r in logs.records if tx.reference in r.getMessage()])
+            self.assertTrue(self.env['mail.mail'].search(
+                [('email_to', '=', 'shop@example.com'), ('subject', 'like', tx.reference)]
+            ))
+
+        @mute_logger(PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_s13_the_merchant_is_told_of_a_second_charge(self):
+            self.ensure_installed('sale')
+            self.env.company.email = 'shop@example.com'
+            order, (late, paid) = self._order_and_attempts('cancel', 'draft')
+            self._notify(paid)
+            with self.assertLogs(TX_LOGGER, level='WARNING') as logs:
+                self._notify(late)
+            self.assertTrue(late._epays_is_refused())
+            self.assertIn("contact us", late.state_message, "The customer is told too.")
+            self._assert_merchant_told(order, late, 'refund it on ePays', logs)
+
+        @mute_logger(PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_s14_a_mismatch_on_the_current_payment_holds_the_order_and_tells_everyone(self):
+            self.ensure_installed('sale')
+            self.env.company.email = 'shop@example.com'
+            order, (tx,) = self._order_and_attempts('draft')
+            with self.assertLogs(TX_LOGGER, level='WARNING') as logs:
+                self._notify(tx, amount='1.000')
+            self.assertEqual(tx.state, 'error')
+            self.assertEqual(order.state, 'draft', "Not paid.")
+            self.assertTrue(tx.epays_charge_refused)
+            self.assertIn("contact us", tx.state_message)
+            self.assertIn(tx.reference, tx.state_message)
+            self._assert_merchant_told(order, tx, 'does not match these documents', logs)
+
+            retry = self._create_transaction(
+                'redirect', reference=False, amount=order.amount_total,
+                sale_order_ids=[Command.set(order.ids)],
+            )
+            with self.assertRaises(ValidationError) as error, \
+                    self._patch_make_request(lambda *args, **kwargs: {}) as make_request_mock:
+                retry._get_processing_values()
+            self.assertIn(tx.reference, error.exception.args[0], "New payments are blocked.")
+            make_request_mock.assert_not_called()
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_s16_a_cancelled_payment_with_an_approved_code_is_not_acknowledged(self):
+            """ ePays reports it now, and Odoo stored no response code: the money was taken. """
+            tx = self._create_epays_transaction(state='cancel')
+            calls = []
+
+            def handler(provider, method, path, **kwargs):
+                calls.append((method, path))
+                return {'status': 'cancelled', 'responseCode': '00'}
+
+            with self._patch_make_request(handler):
+                tx._post_process()
+                self._run_commit_hooks()
+            self.assertEqual(calls, [('GET', f'/api/v2/Payments/{tx.provider_reference}')])
+
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
+        def test_s7_a_held_order_keeps_a_payment_at_the_bank(self):
             """ S7: a void would not stop the bank. """
             self.ensure_installed('sale')
             _order, (held, at_bank) = self._order_and_attempts('cancel', 'draft')
@@ -581,7 +709,7 @@ if AccountPaymentCommon is not None:
             self.assertTrue(at_bank.epays_at_bank)
 
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
-        def test_a_charge_above_what_is_due_is_refused_even_on_time(self):
+        def test_s15_a_charge_above_what_is_due_is_refused_even_on_time(self):
             """ S15: the order was changed after the payment was created. """
             self.ensure_installed('sale')
             order = self._create_sale_order(confirm=False, currency_id=self.currency.id)

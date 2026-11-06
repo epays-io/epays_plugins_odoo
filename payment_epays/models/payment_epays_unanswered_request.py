@@ -169,7 +169,9 @@ class PaymentEpaysUnansweredRequest(models.Model):
         self.ensure_one()
         try:
             self.provider_id._epays_make_request(
-                'POST', f'{const.PAYMENTS_PATH}/{quote(payment_id, safe="")}/acknowledgement',
+                'POST',
+                f'{const.PAYMENTS_PATH}/{quote(payment_id, safe="")}'
+                f'{const.ACKNOWLEDGEMENT_ENDPOINT}',
                 environment=self.environment, domain=self.merchant_domain,
                 timeout=const.POST_PROCESSING_TIMEOUT,
             )

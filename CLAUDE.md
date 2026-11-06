@@ -37,7 +37,7 @@ docker run --rm --network epays-net -e HOST=epays-pg -e USER=odoo -e PASSWORD=od
 - Translations: after changing a user-facing string, re-export `payment_epays/i18n/payment_epays.pot`
   (`odoo -d test --i18n-export=/mnt/extra-addons/payment_epays/i18n/payment_epays.pot --modules=payment_epays --stop-after-init`)
   and merge into `i18n/ar.po` (e.g. `msgmerge`).
-- Release zip: `zip -r dist/payment_epays-<version>.zip payment_epays -x '*/__pycache__/*' '*.pyc'`.
+- Release zip, from the tagged commit, without tests: `zip -r dist/payment_epays-<version>.zip payment_epays -x '*/__pycache__/*' '*.pyc' '*/tests/*'`.
 
 ## Architecture
 
@@ -50,9 +50,11 @@ early for other providers.
   `tests/common.py`), admin actions (*Test connection*, *Find this server's IP address*, *Sync from
   ePays* which fills `payment.epays.gateway`), and 401 diagnosis by ePays reason codes.
 - **`models/payment_transaction.py`** — the flow:
-  1. `_get_specific_rendering_values` POSTs `/api/v2/Payments` (with an idempotency key), stores
-     `provider_reference` = ePays `paymentId` plus environment, domain, expiry, charged amount/
-     currency/rate and the `udf2`/`udf3` custom fields, then redirects. It first reads every live
+  1. `_get_specific_rendering_values` first takes the documents' lock (`_epays_lock_documents`: an
+     update, as a row lock would leave the second click on a stale snapshot; Odoo retries it). It
+     POSTs `/api/v2/Payments` (with an idempotency key), stores
+     `provider_reference` = ePays `paymentId` plus environment, domain, expiry, language, charged
+     amount/currency/rate and rate source, and the `udf2`/`udf3` custom fields, then redirects. It first reads every live
      attempt on the same documents, reuses the newest if it can and voids the others, a declined
      one too (`_epays_find_live_attempts`: one live payment per order).
   2. ePays returns to `/payment/epays/return[/<environment>]?paymentId=…` (controller). The
@@ -90,10 +92,10 @@ early for other providers.
      So `_set_canceled` sets `epays_watch_until` (`_epays_get_watch_limit`), which the
      cron reads to, and the return route reads it at any age, as ePays can correct a payment days
      later and resend its notification (`POST /api/v2/Payments/{id}/notify-deliveries`; correct the
-     status first, Odoo reads it). Public reads are limited (`const.FETCH_LIMIT`, per process; only
-     an applied read counts, as ePays's notification may be the only one, and a read that cannot
-     run hands the transaction back to the cron at any age, `_epays_watch_again`, as ePays counts its
-     call as delivered whatever Odoo did). `_epays_owns_payment`: not
+     status first, Odoo reads it). Public reads are limited (`const.FETCH_LIMIT`, per process; a
+     read counts when it starts, a failed one too, as failed calls are what locks a licence, and a
+     read that cannot run hands the transaction back to the cron at any age, `_epays_watch_again`, as
+     ePays counts its call as delivered whatever Odoo did). `_epays_owns_payment`: not
      when a newer transaction took the payment over. Only a `done` target moves it
      (`_set_done`/`_set_error` with `cancel` allowed). `_epays_complete` locks the documents'
      transactions, then asks the accounting what is due (`_epays_get_amount_due`: residuals and
@@ -102,7 +104,10 @@ early for other providers.
      (`_epays_alert_merchant`) and left for a refund on ePays. A charge above what is due, or a late
      replaced one that is not what a new payment would charge now, is held (`_epays_hold_payment`,
      `epays_review_needed`): the other attempts are stopped and no new payment is taken until the
-     merchant clicks *Allow a New Payment*. A second transaction holding the same ePays payment
+     merchant clicks *Allow a New Payment* (an admin, or staff who can edit every document). A refused
+     charge is final, released or not: `_epays_complete` stops on `epays_charge_refused`, as its
+     `error` state no longer says it was late, and response code `00` alone does not tell: a payment
+     ePays declined with it can still be paid on the same link. A second transaction holding the same ePays payment
      (`_epays_get_payment_holders`) is one charge, not a refusal. A done payment voids the other
      attempts no longer needed on its documents (`_epays_void_other_attempts`, declined ones too:
      ePays lets them retry on the same link). `poll_status` and `_get_last` follow the transaction
@@ -135,7 +140,8 @@ early for other providers.
 - **Multi-company**: one ePays provider per company, created on install and for new companies
   (`res_company.py`, `_epays_ensure_provider_per_company`).
 - `const.py` holds all tunables and protocol constants; `utils.py` holds `EpaysApiError` and pure
-  helpers.
+  helpers, among them the mismatch and API failure checks. Customer messages are in
+  `_epays_compose_customer_message`, except the generic one of a failed call.
 
 ## Rules that are easy to break
 
@@ -153,7 +159,7 @@ early for other providers.
   `migrations/18.0.1.0.3/pre-migrate.py` is how the one such column was moved to a parameter and
   dropped.
 - **Master keys never reach the browser**: reads return `const.SECRET_MASK`, writing the mask back
-  keeps the stored value, and `_read_format` / `_search` / `_read_group` overrides refuse secret
+  keeps the stored value, and `_read_format` / `_search` / `_read_group` / `_export_rows` overrides refuse secret
   fields. Keep secrets out of logs (`_redact`).
 - **Master keys are encrypted in their columns** (`const.SECRET_PREFIX`, `_epays_clean_credentials`):
   read them with `_epays_read_secret`, never as field values. The key is `epays_encryption_key` in
@@ -176,7 +182,7 @@ is made in both, with a test named after its scenario in both. Refunds are out o
 
 | # | Scenario | Expected in both |
 |---|---|---|
-| S1 | Retry while the current payment is at the bank and its link is live | Not voided, no new payment, "still being confirmed" |
+| S1 | Retry while the current payment is at the bank and its link is live | Its link is reused if nothing changed and at least 5 minutes are left; otherwise not voided, no new payment, "still being confirmed" |
 | S2 | Retry while a replaced payment is at the bank | Same, and nothing is voided first |
 | S3 | Retry when a replaced payment has completed | No new payment; the order is settled |
 | S4 | Retry after a decline | Declined link voided before the new payment |
@@ -195,7 +201,7 @@ is made in both, with a test named after its scenario in both. Refunds are out o
 | S17 | Public routes | At most 5 ePays reads a minute per payment attempt; the scheduler and admin action are exempt; malformed ids rejected without a lookup |
 | S18 | Waiting page | Each poll reads ePays within the limit; a customer whose replaced payment is at the bank keeps waiting |
 | S19 | Admin status check | Reads the current and all replaced payments, at any age |
-| S20 | Request content | Same fields; `order` only when lines add up to the fils; description "Order N" in the payment language |
+| S20 | Request content | Same fields; `lineItems` only when they add up to the fils; description "Order N" in the payment language |
 | S21 | Master key handling | Encrypted with prefix `epays1:`; refused over plain HTTP; an unreadable key warns the admin and never falls back to another key |
 | S22 | Admin warnings | Unreadable key, sandbox shown to customers, no exchange rate, rates over 7 days old |
 | S23 | Gateway sync | Follows `nextCursor`, up to 10 pages |
@@ -216,7 +222,7 @@ undone pickings and invoices.
   action; Odoo has no such state, so `epays_review_needed` and *Allow a New Payment* do it.
 - S17: the limit is per transaction and per Odoo process; WooCommerce shares one limit between
   an order's attempts and its workers, and is the stricter. A limited read goes back to the
-  scheduler in both. Odoo counts a read once it is applied, WooCommerce when it starts.
+  scheduler in both.
 - S24: WooCommerce tells a customer back from a replaced payment that no money was taken, on the
   order-pay page. Odoo's session follows the replacement, so that customer never reads it there.
 - WooCommerce only: retiring the links of the customer's other orders (Odoo keeps one cart order);

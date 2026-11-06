@@ -30,7 +30,12 @@ SERVER_IP_PARAM = 'payment_epays.server_ip'
 
 # The API paths used by the addon.
 PAYMENTS_PATH = '/api/v2/Payments'
+ACKNOWLEDGEMENT_ENDPOINT = '/acknowledgement'
 GATEWAYS_PATH = '/api/v2/gateways'
+
+# A request from these hosts stays on the machine, so a master key saved over http crosses no
+# network.
+LOCAL_HOSTS = ('localhost', '127.0.0.1')
 
 # The shop's landing route after a payment (website_sale), and where a customer whose ePays payment
 # failed or was cancelled is sent instead: back to the payment step, with the cart kept, and the
@@ -70,6 +75,9 @@ ENCRYPTION_KEY_VARIABLE = 'EPAYS_ENCRYPTION_KEY'
 # The only currency ePays takes payments in (ISO 4217). A payment in another currency is converted
 # to it with Odoo's exchange rate before it is sent to ePays.
 CHARGE_CURRENCY = 'BHD'
+# Where the rate of a converted payment comes from, recorded with it for the merchant. Odoo's own
+# rates are the only source: its multi-currency is built in, there are no plugins to read.
+RATE_SOURCE = 'Odoo'
 
 # The code of the single "ePays" payment method, with which the customer chooses the payment
 # method on the ePays page.

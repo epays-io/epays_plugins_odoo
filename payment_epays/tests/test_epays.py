@@ -1109,7 +1109,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             "The transaction that took the payment over reads it.",
         )
 
-    def test_a_cancelled_payment_is_watched_as_long_as_its_customer_can_pay_it(self):
+    def test_s9_a_cancelled_payment_is_watched_as_long_as_its_customer_can_pay_it(self):
         """ S9: the same limits as `OrderStore::watch_payment` in the WooCommerce plugin. """
         now = fields.Datetime.now()
         with patch.object(fields.Datetime, 'now', return_value=now):
@@ -1126,7 +1126,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                     tx._set_canceled("Replaced.")
                     self.assertEqual(tx.epays_watch_until, now + watched_for)
 
-    def test_a_payment_found_at_the_bank_is_watched_for_longer(self):
+    def test_s9_a_payment_found_at_the_bank_is_watched_for_longer(self):
         """ S9: the cancellation did not know it, as with `OrderStore::set_at_bank`. """
         tx = self._create_epays_transaction(state='cancel')
         tx._epays_record_at_bank(
@@ -1136,7 +1136,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             tx.epays_watch_until, fields.Datetime.now() + const.CRON_MAX_AGE - timedelta(seconds=5)
         )
 
-    def test_the_public_routes_read_a_payment_a_limited_number_of_times(self):
+    def test_s17_the_public_routes_read_a_payment_a_limited_number_of_times(self):
         """ S17: a transaction stays readable on a public route, whatever its state. """
         for state in ('cancel', 'draft', 'error'):
             with self.subTest(state=state):
@@ -1154,7 +1154,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                         "Read again after the window.",
                     )
 
-    def test_a_read_that_cannot_run_goes_back_to_the_scheduled_check(self):
+    def test_s10_a_read_that_cannot_run_goes_back_to_the_scheduled_check(self):
         """ S10: ePays's notification may be the only one, even long after the cancellation. """
         now = fields.Datetime.now()
         tx = self._create_epays_transaction(state='cancel')
@@ -1217,7 +1217,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
         self.assertEqual(tx.state, 'done')
 
-    def test_a_failed_read_does_not_use_up_the_next_one(self):
+    def test_s17_a_failed_read_counts_and_leaves_the_next_one_free(self):
         """ ePays notifies once: a timeout must leave the retry free to record the charge. """
         tx = self._create_epays_transaction(state='cancel')
         tx.epays_watch_until = fields.Datetime.now() - timedelta(days=9)
@@ -1229,12 +1229,39 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         with self._patch_make_request(handler), mute_logger(TX_LOGGER):
             tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
         self.assertTrue(tx._epays_may_be_charged(), "The scheduled check reads it instead.")
-        self.assertEqual(tx._epays_get_recent_reads(), [])
+        self.assertEqual(len(tx._epays_get_recent_reads()), 1)
         with self._patch_payment_details(data), mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
             tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
         self.assertEqual(tx.state, 'done')
 
-    def test_a_malformed_payment_id_is_refused_without_a_lookup(self):
+    def test_s17_failing_reads_stop_at_the_limit(self):
+        """ Failed calls are what locks a licence on ePays: a script gets no more of them. """
+        tx = self._create_epays_transaction(state='cancel')
+        calls = []
+
+        def handler(provider, method, path, **kwargs):
+            calls.append(method)
+            raise EpaysApiError("refused", http_status=401)
+
+        with self._patch_make_request(handler), mute_logger(TX_LOGGER):
+            for _i in range(const.FETCH_LIMIT + 3):
+                tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
+        self.assertEqual(len(calls), const.FETCH_LIMIT)
+        self.assertTrue(tx._epays_may_be_charged(), "The scheduled check reads it instead.")
+
+    def test_s17_an_unknown_environment_is_refused_without_a_lookup(self):
+        """ The environment comes from a fixed list, and the URL of the route is public. """
+        tx = self._create_epays_transaction(state='pending')
+        Transaction = self.env['payment.transaction']
+        with patch.object(
+            type(Transaction), 'search', wraps=Transaction.search,
+        ) as search_mock, self.assertRaises(ValidationError):
+            Transaction._get_tx_from_notification_data('epays', {
+                'paymentId': tx.provider_reference, const.NOTIFICATION_ENVIRONMENT_KEY: 'unknown',
+            })
+        search_mock.assert_not_called()
+
+    def test_s17_a_malformed_payment_id_is_refused_without_a_lookup(self):
         """ S17: the same rule as `ReturnController::is_valid_payment_id`. """
         Transaction = self.env['payment.transaction']
         for payment_id in ('', ' ', 'a' * 65, "PAY'1", 'PAY 1', '../PAY', ['PAY']):
@@ -1534,7 +1561,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         with self.assertRaises(ValidationError):
             self.provider.write({'epays_master_key': False})
 
-    def test_the_database_only_holds_encrypted_master_keys(self):
+    def test_s21_the_database_only_holds_encrypted_master_keys(self):
         """ S21: a dump or a backup of the column reveals no key. """
         self.provider.write({'epays_master_key': 'a-new-master-key'})
         self.provider.flush_recordset()
@@ -1559,7 +1586,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             self.provider._epays_get_credentials('production'), ('prod-api-id', 'plain-key')
         )
 
-    def test_a_master_key_that_cannot_be_read_is_never_replaced_by_another(self):
+    def test_s21_a_master_key_that_cannot_be_read_is_never_replaced_by_another(self):
         """ S21: a sandbox request does not send the production key. """
         self.provider.flush_recordset()
         with patch.object(
@@ -1580,7 +1607,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             with patch.dict(config.options, {const.ENCRYPTION_KEY_OPTION: 'from-odoo-conf'}):
                 self.assertEqual(Provider._epays_get_key_material(), 'from-odoo-conf')
 
-    def test_a_master_key_is_refused_over_plain_http(self):
+    def test_s21_a_master_key_is_refused_over_plain_http(self):
         """ S21: it just crossed the network in clear. """
         fake_request = MagicMock()
         fake_request.httprequest.scheme = 'http'
@@ -1596,7 +1623,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             fake_request.httprequest.host = 'localhost:8069'
             self.provider.write({'epays_master_key': 'another-master-key'})
 
-    def test_the_provider_warns_about_what_needs_attention(self):
+    def test_s22_the_provider_warns_about_what_needs_attention(self):
         """ S22: the warnings of the WooCommerce plugin's `Notices`. """
         self.assertEqual(
             self.provider._epays_get_warnings(), [] if self.provider.state != 'test' else
@@ -1628,7 +1655,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         rate.name = fields.Date.today() - timedelta(days=6)
         self.assertFalse(self.provider._epays_has_stale_rate(company))
 
-    def test_the_order_lines_are_sent_only_when_they_add_up_to_the_fils(self):
+    def test_s20_the_order_lines_are_sent_only_when_they_add_up_to_the_fils(self):
         """ S20: Tabby recomputes what it charges from them. """
         item = {'name': "Coffee", 'quantity': 2, 'sku': 'C1', 'total': 5000}
         lines = epays_utils.get_order_lines([item], 500, 5500, 3)
@@ -1647,8 +1674,166 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             [{'name': "Coffee × 3", 'quantity': 1, 'unitPrice': '5.000', 'sku': 'C1'}],
             "A unit price would be rounded: one line with its total.",
         )
+        self.assertEqual(
+            epays_utils.get_order_lines(
+                [item, {'name': "Tea", 'quantity': 3, 'sku': '', 'total': 1000}], 0, 6000, 3,
+            ),
+            [
+                {'name': "Coffee", 'quantity': 2, 'unitPrice': '2.500', 'sku': 'C1'},
+                {'name': "Tea × 3", 'quantity': 1, 'unitPrice': '1.000'},
+            ],
+            "Only the line that does not divide loses its quantity.",
+        )
 
-    def test_the_payment_request_describes_the_order(self):
+    def test_the_amount_is_compared_at_the_precision_of_the_charged_currency(self):
+        data = {'amount': '37.600', 'currency': 'bhd '}
+        self.assertEqual(epays_utils.get_amount_mismatches(data, 37.6, 'BHD', 3), [])
+        self.assertEqual(epays_utils.get_amount_mismatches(data, 37.599, 'BHD', 3), ['amount'])
+        self.assertEqual(epays_utils.get_amount_mismatches(data, 37.6, 'USD', 3), ['currency'])
+        for amount in (None, 'not a number', 'nan', 'inf'):
+            with self.subTest(amount=amount):
+                self.assertEqual(
+                    epays_utils.get_amount_mismatches(dict(data, amount=amount), 37.6, 'BHD', 3),
+                    ['amount'],
+                )
+
+    def test_the_references_are_compared_only_when_epays_returns_them(self):
+        def has_mismatch(custom_fields):
+            return epays_utils.has_reference_mismatch(
+                {'customFields': custom_fields}, 'S00001', False
+            )
+
+        self.assertFalse(has_mismatch(None))
+        self.assertFalse(has_mismatch({'udf2': ' S00001 ', 'udf3': ''}))
+        self.assertTrue(has_mismatch({'udf2': 'S00002', 'udf3': ''}))
+        self.assertTrue(has_mismatch({'udf2': 'S00001', 'udf3': 'INV/1'}))
+
+    def test_a_failed_response_is_read_as_one_kind_of_failure(self):
+        error = {'code': 'E1'}
+        self.assertIsNone(epays_utils.get_api_failure(True, {'status': 'SUCCESS'}))
+        self.assertEqual(
+            epays_utils.get_api_failure(True, {'status': 'error', 'error': error}), error,
+            "The envelope can fail on HTTP 200.",
+        )
+        self.assertEqual(epays_utils.get_api_failure(False, {'error': error}), error)
+        self.assertEqual(epays_utils.get_api_failure(False, {'error': 'text'}), {})
+        self.assertEqual(epays_utils.get_api_failure(True, None), {}, "Not JSON.")
+        self.assertEqual(epays_utils.get_api_failure(True, ['list']), {})
+
+    def test_an_error_response_is_logged_at_debug_level_only(self):
+        """ An error can repeat what the request held, and the code is enough to diagnose it. """
+        response = FakeResponse(422, {'status': 'ERROR', 'error': {
+            'code': 'INVALID_EMAIL', 'message': f"Invalid email {self.partner.email}",
+        }})
+        with patch(REQUESTS_PATH, return_value=response), \
+                self.assertLogs(PROVIDER_LOGGER, level='DEBUG') as logs, \
+                self.assertRaises(EpaysApiError) as error:
+            self.provider._epays_make_request(
+                'GET', '/api/v2/Payments', environment='sandbox', domain='shop.example.com',
+            )
+        self.assertEqual(error.exception.error_code, 'INVALID_EMAIL')
+        leaks = [r for r in logs.records if self.partner.email in r.getMessage()]
+        self.assertTrue(leaks, "The response is still available when debugging.")
+        self.assertEqual({r.levelname for r in leaks}, {'DEBUG'})
+        self.assertTrue([r for r in logs.records if 'INVALID_EMAIL' in r.getMessage()])
+
+    def test_a_request_for_the_same_documents_waits_before_reading_epays(self):
+        """ Two first clicks would each create a payable link: see `_epays_lock_documents`. """
+        self._skip_without_sale()
+        order = self._create_sale_order()
+        tx = self._create_transaction('redirect', reference=False, **self._order_values(order))
+        events = []
+
+        def handler(provider, method, path, **kwargs):
+            events.append(method)
+            return {'paymentId': self.payment_id, 'redirect': self.redirect_url}
+
+        lock_path = (
+            'odoo.addons.payment_epays.models.payment_transaction.PaymentTransaction'
+            '._epays_lock_documents'
+        )
+        with patch(lock_path, autospec=True, side_effect=lambda tx: events.append('lock')), \
+                self._patch_make_request(handler), mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER):
+            tx._get_processing_values()
+        self.assertEqual(events, ['lock', 'POST'])
+
+    def test_the_document_lock_updates_the_row(self):
+        """ A row lock alone leaves the second request on a snapshot without the first payment. """
+        self._skip_without_sale()
+        order = self._create_sale_order()
+        tx = self._create_transaction('redirect', reference=False, **self._order_values(order))
+        write_date = order.write_date
+        self.env.flush_all()
+        with patch.object(self.env.cr, 'execute', wraps=self.env.cr.execute) as execute_mock:
+            tx._epays_lock_documents()
+        self.assertIn('UPDATE "sale_order"', str(execute_mock.call_args.args[0]))
+        order.invalidate_recordset(['write_date'])
+        self.assertEqual(order.write_date, write_date, "Nobody edited the order.")
+
+    def test_the_language_and_the_rate_source_are_stored_with_the_payment(self):
+        self.provider.epays_payment_lang = 'ar'
+        tx = self._create_transaction('redirect', reference=self._new_reference())
+        self._initiate(tx)
+        self.assertEqual(tx.epays_lang, 'ar')
+        self.assertFalse(tx.epays_rate_source, "Nothing was converted.")
+
+        self.provider.epays_payment_lang = 'en'
+        usd = self._usd_at(0.376)
+        converted = self._create_transaction(
+            'redirect', reference=self._new_reference(), amount=100.0, currency_id=usd.id,
+        )
+        self._initiate(converted)
+        self.assertEqual(converted.epays_lang, 'en')
+        self.assertEqual(converted.epays_rate_source, const.RATE_SOURCE)
+
+    def test_a_server_that_does_not_report_the_language_leaves_the_stored_one(self):
+        tx = self._create_epays_transaction(epays_lang='ar')
+        self.assertEqual(tx._epays_get_payment_lang({}), 'ar')
+        self.assertEqual(tx._epays_get_payment_lang({'paymentLang': 'en'}), 'en')
+
+    def test_a_retry_in_another_language_opens_a_new_page_on_any_server(self):
+        self._skip_without_sale()
+        order = self._create_sale_order()
+        first = self._earlier_attempt(order, state='pending', epays_lang='ar')
+        pending = self._payment_data(first, status='Pending', result='')
+        pending.pop('paymentLang', None)
+        voided = {'paymentId': first.provider_reference, 'status': 'Voided'}
+        tx, calls, _values = self._pay_again(
+            [pending], delete_response=voided, lang='en_US', **self._order_values(order)
+        )
+        self.assertEqual([method for method, _path in calls], ['GET', 'DELETE', 'POST'])
+        self.assertEqual(tx.epays_lang, 'en')
+
+    def test_s1_an_unchanged_payment_at_the_bank_keeps_its_link(self):
+        """ Nothing is voided, and the customer returns to the page of the same payment. """
+        self._skip_without_sale()
+        order = self._create_sale_order()
+        first = self._earlier_attempt(order, state='pending')
+        at_bank = self._payment_data(first, status='Pending', result='', transactionId='TXN-1')
+        tx, calls, _values = self._pay_again([at_bank], **self._order_values(order))
+        self.assertEqual([method for method, _path in calls], ['GET'], "No void, no new payment.")
+        self.assertEqual(tx.provider_reference, first.provider_reference)
+        self.assertTrue(tx.epays_at_bank, "The state read comes along with the payment.")
+
+    def test_s2_a_replaced_payment_at_the_bank_outlives_its_link(self):
+        """ Its link expired long ago, and the bank can still answer. """
+        self._skip_without_sale()
+        order = self._create_sale_order()
+        first = self._earlier_attempt(
+            order, state='cancel', epays_at_bank=True,
+            epays_expires_at=fields.Datetime.now() - timedelta(days=1),
+        )
+        at_bank = self._payment_data(first, status='Pending', result='', transactionId='TXN-1')
+        with self.assertRaises(ValidationError) as error:
+            self._pay_again([at_bank], **self._order_values(order))
+        self.assertIn("still being confirmed", error.exception.args[0])
+
+        voided = self._payment_data(first, status='Voided', result='', transactionId=None)
+        tx, _calls, _values = self._pay_again([voided], **self._order_values(order))
+        self.assertEqual(tx.provider_reference, 'PAY-NEW', "The bank answered: no longer held up.")
+        self.assertFalse(first.epays_at_bank)
+
+    def test_s20_the_payment_request_describes_the_order(self):
         """ S20: as the WooCommerce plugin does. """
         if not self._sale_installed():
             self.skipTest("sale is not installed")
@@ -1684,7 +1869,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         data['customFields']['udf2'] = ' S1 '
         self.assertEqual(tx._epays_get_mismatches(data), [])
 
-    def test_the_sync_follows_the_pages_of_gateways(self):
+    def test_s23_the_sync_follows_the_pages_of_gateways(self):
         """ S23: a row the sync did not see would be deleted. """
         pages = [
             {'gateways': [{'subscriptionId': 'G1', 'gatewayTypeId': 2, 'status': 'active'}],
@@ -1874,10 +2059,47 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             lambda: Provider.search([], order='epays_master_key'),
             lambda: Provider._read_group([], ['epays_master_key']),
             lambda: Provider._read_group([], [], ['epays_sandbox_master_key:array_agg']),
+            lambda: self.provider.export_data(['epays_master_key']),
+            lambda: self._create_epays_transaction().export_data(
+                ['provider_id/epays_sandbox_master_key']
+            ),
         ):
             with self.subTest(attempt=attempt), self.assertRaises(AccessError):
                 attempt()
         self.assertIn(self.provider, Provider.search([('code', '=', 'epays')], order='name'))
+        self.assertEqual(self.provider.export_data(['name'])['datas'], [[self.provider.name]])
+
+    def test_s21_an_unreadable_key_is_not_offered_to_customers(self):
+        """ A key that cannot be read is no key: a customer must not reach a failing payment. """
+        self.provider.write({'state': 'test', 'is_published': True})
+        self.provider.flush_recordset()
+        Provider = self.env['payment.provider'].sudo()
+
+        def get_compatible_providers(report=None):
+            return Provider._get_compatible_providers(
+                self.company_id, self.partner.id, self.amount, currency_id=self.currency.id,
+                report=report,
+            )
+
+        self.assertIn(self.provider, get_compatible_providers())
+        report = {}
+        with patch.object(
+            type(self.provider), '_epays_get_key_material', return_value='another-secret',
+        ), mute_logger(PROVIDER_LOGGER):
+            self.provider.invalidate_recordset()
+            self.assertNotIn(self.provider, get_compatible_providers(report))
+        self.assertFalse(report['providers'][self.provider]['available'])
+
+    def test_the_payment_link_stays_out_of_the_logs(self):
+        """ Whoever holds the link can open the payment page, and the response has customer data.
+        """
+        tx = self._create_transaction('redirect', reference='LOG-1')
+        response = {'redirect': 'https://testapi.epays.io/pay/P1?token=the-token'}
+        with self._patch_make_request(lambda *args, **kwargs: response), \
+                self.assertLogs(TX_LOGGER, level='WARNING') as logs, \
+                mute_logger(PAYMENT_TX_LOGGER), self.assertRaises(ValidationError):
+            tx._get_processing_values()
+        self.assertFalse([r for r in logs.records if 'the-token' in r.getMessage()])
 
     def test_non_admins_cannot_read_the_credentials(self):
         for field_name in ('epays_api_id', 'epays_master_key', 'epays_sandbox_master_key'):
@@ -2940,7 +3162,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(tx.provider_reference, first.provider_reference)
         self.assertEqual(tx.epays_gateway_requested, self.card_gateway_ref)
 
-    def test_pay_again_when_the_void_is_refused_and_the_order_was_paid(self):
+    def test_s6_a_refused_void_on_an_order_that_was_paid(self):
         self._skip_without_sale()
         order = self._create_sale_order()
         first = self._earlier_attempt(order, amount=order.amount_total - 10)
@@ -2955,7 +3177,8 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(error.exception.args[0], "ePays: This order has already been paid.")
         self._assert_completed_by_the_cron(first)
 
-    def test_pay_again_when_the_void_is_refused_and_still_pending(self):
+    def test_s24_a_refused_void_that_is_still_pending_is_no_connection_failure(self):
+        """ ePays answered: the customer is asked to try again, and no second payment is made. """
         self._skip_without_sale()
         order = self._create_sale_order()
         first = self._earlier_attempt(order, amount=order.amount_total - 10)
@@ -2967,9 +3190,8 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
                 delete_response=EpaysApiError("ePays: refused", http_status=400),
                 **self._order_values(order),
             )
-        self.assertEqual(
-            error.exception.args[0], "ePays: Could not establish the connection to the API."
-        )
+        self.assertIn("could not be closed yet", error.exception.args[0])
+        self.assertNotIn("connection", error.exception.args[0])
         self.assertEqual(first.state, 'draft')
 
     def test_s24_a_payment_in_flight_counts_as_with_the_gateway(self):
@@ -3034,7 +3256,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             )
         self.assertIn("still being confirmed", error.exception.args[0])
 
-    def test_pay_again_when_the_earlier_payment_was_paid(self):
+    def test_s3_a_retry_when_the_earlier_payment_was_paid(self):
         self._skip_without_sale()
         order = self._create_sale_order()
         first = self._earlier_attempt(order)
@@ -3080,9 +3302,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             self._pay_again(
                 [unknown, unknown], delete_response=refused, **self._order_values(order)
             )
-        self.assertEqual(
-            error.exception.args[0], "ePays: Could not establish the connection to the API."
-        )
+        self.assertIn("could not be closed yet", error.exception.args[0])
         self.assertEqual(first.state, 'draft')
 
         with self.assertRaises(ValidationError) as error:
@@ -3113,7 +3333,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             tx._get_processing_values()
         self.assertEqual(methods, ['GET', 'DELETE', 'GET'], "No POST.")
 
-    def test_pay_again_after_a_failed_payment_voids_it_first(self):
+    def test_s4_a_retry_after_a_failed_payment_voids_it_first(self):
         """ S4: ePays keeps a declined link payable. """
         self._skip_without_sale()
         for state in ('pending', 'error'):
@@ -3145,7 +3365,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         )
         self.assertEqual(first.state, 'draft')
 
-    def test_pay_again_voids_the_live_attempts_it_cannot_reuse(self):
+    def test_s5_a_retry_voids_the_live_attempts_it_cannot_reuse(self):
         """ S5: a link about to expire can still be paid. """
         self._skip_without_sale()
         now = fields.Datetime.now()
@@ -3220,7 +3440,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(newest.state, 'cancel')
         self.assertEqual(tx.provider_reference, newest.provider_reference)
 
-    def test_pay_again_while_a_payment_is_with_the_gateway(self):
+    def test_s1_a_changed_payment_at_the_bank_stops_the_retry(self):
         """ S1: a void would not stop the bank. Reusing its page is harmless: nothing is voided. """
         self._skip_without_sale()
         order = self._create_sale_order()
@@ -3240,7 +3460,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(methods, ['GET'], "Neither voided nor replaced.")
         self.assertEqual(first.state, 'pending')
 
-    def test_pay_again_reads_the_replaced_payments_before_voiding_anything(self):
+    def test_s2_a_retry_reads_the_replaced_payments_before_voiding_anything(self):
         """ S2, S3: raising does not undo a void, so nothing is voided before the check. """
         self._skip_without_sale()
         order = self._create_sale_order()
@@ -3289,7 +3509,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         tx, calls, _values = self._pay_again(**self._order_values(order))
         self.assertEqual([method for method, _path in calls], ['POST'])
 
-    def test_the_cron_voids_the_link_of_a_cancelled_order(self):
+    def test_s8_the_cron_voids_the_link_of_a_cancelled_order(self):
         """ S8: with this addon's dependencies, the scheduled check finds them. """
         self._skip_without_sale()
         for state, status in (('draft', 'Pending'), ('error', 'Failed')):
@@ -3370,7 +3590,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(calls, ['GET'])
         self.assertEqual(tx.state, 'draft')
 
-    def test_the_status_page_reads_epays_for_a_customer_waiting(self):
+    def test_s18_the_status_page_reads_epays_for_a_customer_waiting(self):
         """ S18: within the limit of the public routes. """
         tx = self._create_epays_transaction(state='pending')
         data = self._payment_data(tx)
@@ -3395,9 +3615,9 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         with self._patch_make_request(handler), mute_logger(TX_LOGGER):
             tx._epays_refresh_for_status_page()
         self.assertEqual(tx.state, 'pending')
-        self.assertEqual(tx._epays_get_recent_reads(), [], "The next poll tries again.")
+        self.assertEqual(len(tx._epays_get_recent_reads()), 1, "It counts: the next poll retries.")
 
-    def test_the_status_page_keeps_a_customer_waiting_on_the_bank(self):
+    def test_s18_the_status_page_keeps_a_customer_waiting_on_the_bank(self):
         """ S18: Odoo's page leaves on `cancel`, and the bank can still take the money. """
         tx = self._create_epays_transaction(state='cancel', epays_at_bank=True)
         at_bank = self._payment_data(tx, status='Pending', result='', transactionId='TXN-1')
@@ -3436,7 +3656,7 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertIn("Replaced by", html)
         self.assertIn("alert-danger", html)
 
-    def test_the_merchant_can_check_a_payment_at_any_age(self):
+    def test_s19_the_merchant_can_check_a_payment_at_any_age(self):
         """ S19: the replaced payments are read too. """
         self._skip_without_sale()
         order = self._create_sale_order()

@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0-20260908\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 06:23+0000\n"
-"PO-Revision-Date: 2026-11-05 06:23+0000\n"
+"POT-Creation-Date: 2026-11-06 05:05+0000\n"
+"PO-Revision-Date: 2026-11-06 05:05+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -134,6 +134,7 @@ msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_payment_lang__ar
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_transaction__epays_lang__ar
 msgid "Arabic"
 msgstr ""
 
@@ -163,6 +164,11 @@ msgstr ""
 #. module: payment_epays
 #: model:payment.method,name:payment_epays.payment_method_epays_card
 msgid "Card"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_charge_refused
+msgid "Charge Refused"
 msgstr ""
 
 #. module: payment_epays
@@ -239,6 +245,7 @@ msgstr ""
 
 #. module: payment_epays
 #: model:ir.model.fields.selection,name:payment_epays.selection__payment_provider__epays_payment_lang__en
+#: model:ir.model.fields.selection,name:payment_epays.selection__payment_transaction__epays_lang__en
 msgid "English"
 msgstr ""
 
@@ -253,6 +260,11 @@ msgstr ""
 #: code:addons/payment_epays/models/payment_transaction.py:0
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_exchange_rate
 msgid "Exchange Rate"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_rate_source
+msgid "Exchange Rate Source"
 msgstr ""
 
 #. module: payment_epays
@@ -670,7 +682,7 @@ msgstr ""
 #. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
-msgid "The ePays master keys cannot be searched, grouped or sorted."
+msgid "The ePays master keys cannot be exported, searched, grouped or sorted."
 msgstr ""
 
 #. module: payment_epays
@@ -731,6 +743,13 @@ msgid ""
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_lang
+msgid ""
+"The language the ePays page was opened in, and the customer's messages "
+"follow."
+msgstr ""
+
+#. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid "The payment link expiry must be at least one minute."
@@ -762,8 +781,8 @@ msgstr ""
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_watch_until
 msgid ""
-"The scheduled check reads this payment until then, as ePays can still "
-"charge it."
+"The scheduled check reads this payment until then, as ePays can still charge"
+" it."
 msgstr ""
 
 #. module: payment_epays
@@ -861,6 +880,11 @@ msgid "What the administrator should know about this provider now."
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_rate_source
+msgid "Where the exchange rate of a converted payment came from."
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_at_bank
 msgid "With the Gateway"
 msgstr ""
@@ -935,6 +959,14 @@ msgstr ""
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid ""
+"Your previous payment for this order could not be closed yet. Please try "
+"again in a few minutes."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
 "Your previous payment for this order is still being confirmed. If you "
 "completed it, your order will update by itself, so please do not pay again. "
 "If you did not, you can try again in a few minutes."
@@ -984,6 +1016,11 @@ msgstr ""
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_merchant_domain
 msgid "ePays Merchant Domain"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_lang
+msgid "ePays Page Language"
 msgstr ""
 
 #. module: payment_epays
@@ -1099,6 +1136,13 @@ msgid ""
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_charge_refused
+msgid ""
+"ePays took this money and Odoo did not record it. It never will: refund it "
+"on ePays if it is not needed."
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.actions.server,name:payment_epays.cron_epays_poll_pending_ir_actions_server
 msgid "ePays: check pending payments"
 msgstr ""
@@ -1119,6 +1163,12 @@ msgstr ""
 #. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid "the API ID or the API master key is wrong."
+msgstr ""
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "the API credentials are missing or cannot be read"
 msgstr ""
 
 #. module: payment_epays

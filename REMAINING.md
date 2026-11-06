@@ -1,8 +1,10 @@
 # ePays for Odoo — what is left
 
-Status on 2026-11-05. The addon (`payment_epays` 18.0.1.0.7, not yet on the store) is
-feature-complete and tested: 220 tests with sales and accounting, 186 with the module alone, lint
-clean, upgraded from 18.0.1.0.6. 18.0.1.0.7 aligns it with the WooCommerce plugin (see *Parity* in
+Status on 2026-11-06. The addon (`payment_epays` 18.0.1.0.8, not yet on the store) is
+feature-complete and tested: 243 tests with sales and accounting, 201 with the module alone, lint
+clean, upgraded from 18.0.1.0.7. 18.0.1.0.8 fixes what the audit against `PLUGIN_CHECKLIST.md`
+found: a held charge is never applied, also after its release, failed reads count towards the
+public limit, and more. Not run end to end yet. 18.0.1.0.7 aligns it with the WooCommerce plugin (see *Parity* in
 `CLAUDE.md`) and encrypts the master keys, tested end-to-end against the local API with
 `PAYMENT_IN_FLIGHT` (commit `c27da288`): shop checkout and decline in Arabic, card payment, decline
 and retry, Back to Store, a void during 3-D Secure, a cancelled order voided by the cron, also at
@@ -51,7 +53,7 @@ methods.
 
 ## 3. Release order with the ePays core API (2026-10-20)
 
-- [ ] **Publish 18.0.1.0.7 before the ePays API with `PAYMENT_IN_FLIGHT` reaches production.** It
+- [ ] **Publish 18.0.1.0.8 before the ePays API with `PAYMENT_IN_FLIGHT` reaches production.** It
       refuses the void of a payment the customer may be paying (HTTP 409) and adds `inFlight`,
       `inFlightUntil` and `lateCapture` to the payment details. 18.0.1.0.6 and older treat that
       payment as voidable: the customer reads a connection error, and an orphan stays payable.
@@ -108,7 +110,26 @@ For every shop that uses the addon:
 - [ ] **An encryption key on Odoo.sh**: without `odoo.conf` access, the keys are encrypted with
       `database.secret`. Is an environment variable available there?
 
-## 6. Clean up the development environment
+## 6. WooCommerce parity after the 18.0.1.0.8 audit
+
+To do once its end-to-end run is over (`epays-woocommerce`, not changed by the audit):
+
+- [ ] **S24:** `Checkout.php` still answers a refused void that is not at the bank with
+      `generic_error()`, "We could not reach the payment service". Odoo now asks the customer to try
+      again, without a connection failure.
+- [ ] **S1 and S20:** copy the reworded rows of `PLUGIN_CHECKLIST.md` and `CLAUDE.md` to its parity
+      table: the link is reused if nothing changed, and only `lineItems` depends on the sum.
+- [ ] **Order lines:** `OrderSummary::lines` still drops every quantity when one line does not
+      divide. Odoo now does it for that line alone, as section 3.5 says.
+- [ ] **Test names:** Odoo's main test of each scenario is now `test_s<N>_…`. Its tests mirrored
+      these names.
+
+## 7. Confirm with ePays
+
+- [ ] The terms and privacy URLs in the listing, `https://epays.io/terms` and `https://epays.io/privacy`,
+      are the ones in the WooCommerce readme: the site answers every path with the same page.
+
+## 8. Clean up the development environment
 
 - [ ] Docker containers `epays-e2e-odoo` and `epays-e2e-pg`, and the volume `epays-e2e-data`:
       `docker rm -f epays-e2e-odoo epays-e2e-pg && docker volume rm epays-e2e-data`.

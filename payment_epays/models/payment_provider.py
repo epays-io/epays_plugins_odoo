@@ -25,9 +25,6 @@ _logger = logging.getLogger(__name__)
 # Whitespace and control characters: never part of a credential, and invalid in an HTTP header.
 _INVALID_CREDENTIAL = re.compile(r'[\s\x00-\x1f\x7f]')
 
-# A request from these hosts stays on the machine, as WordPress's `local` environment does.
-LOCAL_HOSTS = ('localhost', '127.0.0.1')
-
 
 class PaymentProvider(models.Model):
     _inherit = 'payment.provider'
@@ -276,7 +273,7 @@ class PaymentProvider(models.Model):
         if not request or 'localhost' in (vals.get('epays_mode'), *self.mapped('epays_mode')):
             return
         http_request = request.httprequest
-        if http_request.scheme == 'https' or http_request.host.split(':')[0] in LOCAL_HOSTS \
+        if http_request.scheme == 'https' or http_request.host.split(':')[0] in const.LOCAL_HOSTS \
                 or http_request.headers.get('X-Forwarded-Proto') == 'https':
             return
         raise ValidationError(_(
@@ -344,6 +341,12 @@ class PaymentProvider(models.Model):
             limit=limit, order=order,
         )
 
+    def _export_rows(self, field_paths, *, _is_toplevel_call=True):
+        """ Override of `base`: `exportable=False` only hides a field from the export dialog, and
+        `export_data` would list the stored keys. """
+        self._epays_check_no_secret_in([path[0] for path in field_paths if path], [])
+        return super()._export_rows(field_paths, _is_toplevel_call=_is_toplevel_call)
+
     @api.model
     def _epays_check_no_secret_in(self, field_specs, orders):
         """ Refuse field specs (`field`, `field.sub`, `field:agg`) and orders naming a secret.
@@ -354,7 +357,9 @@ class PaymentProvider(models.Model):
         for order in orders:
             named.update(part.split()[0] for part in order.split(',') if part.split())
         if named & set(const.SECRET_FIELDS):
-            raise AccessError(_("The ePays master keys cannot be searched, grouped or sorted."))
+            raise AccessError(_(
+                "The ePays master keys cannot be exported, searched, grouped or sorted."
+            ))
 
     #=== CONSTRAINT METHODS ===#
 
@@ -405,13 +410,24 @@ class PaymentProvider(models.Model):
         self, company_id, partner_id, amount, currency_id=None, force_tokenization=False,
         is_express_checkout=False, is_validation=False, report=None, **kwargs
     ):
-        """ Override of `payment` to offer ePays only in a currency Odoo can convert to the one
-        ePays charges in. """
+        """ Override of `payment` to offer ePays only with credentials it can use, and in a currency
+        Odoo can convert to the one ePays charges in. """
         providers = super()._get_compatible_providers(
             company_id, partner_id, amount, currency_id=currency_id,
             force_tokenization=force_tokenization, is_express_checkout=is_express_checkout,
             is_validation=is_validation, report=report, **kwargs
         )
+        unusable_providers = providers.filtered(
+            lambda p: p.code == 'epays' and not p._epays_has_credentials()
+        )
+        if unusable_providers:
+            providers -= unusable_providers
+            payment_utils.add_to_report(
+                report,
+                unusable_providers,
+                available=False,
+                reason=_("the API credentials are missing or cannot be read"),
+            )
         currency = self.env['res.currency'].browse(currency_id).exists()
         company = self.env['res.company'].browse(company_id).exists()
         if currency and company and not self._epays_can_convert(currency, company):
@@ -582,6 +598,17 @@ class PaymentProvider(models.Model):
             )
         return (api_id or '').strip(), (master_key or '').strip()
 
+    def _epays_has_credentials(self):
+        """ Return whether the provider's mode has an API ID and a master key it can read.
+
+        Note: self.ensure_one()
+
+        :return: Whether a request can authenticate.
+        :rtype: bool
+        """
+        self.ensure_one()
+        return all(self._epays_get_credentials(self._epays_get_environment()))
+
     def _epays_get_merchant_domain(self):
         """ Return the merchant domain to authenticate with.
 
@@ -702,25 +729,23 @@ class PaymentProvider(models.Model):
         except ValueError:
             body = None
 
-        is_success = (
-            response.ok
-            and isinstance(body, dict)
-            and str(body.get('status', '')).upper() != 'ERROR'
-        )
-        if not is_success:
-            error = body.get('error') if isinstance(body, dict) else None
-            error = error if isinstance(error, dict) else {}
+        failure = epays_utils.get_api_failure(response.ok, body)
+        if failure is not None:
+            # The code is enough for the log: an error can repeat what the request held.
             _logger.warning(
-                "invalid API request at %s (HTTP %s):\n%s",
-                url, response.status_code,
+                "invalid API request at %s (HTTP %s): %s", url, response.status_code,
+                failure.get('code') or '-',
+            )
+            _logger.debug(
+                "response:\n%s",
                 pprint.pformat(body if isinstance(body, dict) else response.text[:1000]),
             )
             raise EpaysApiError(
                 generic_message,
                 http_status=response.status_code,
-                error_code=error.get('code'),
-                error_message=error.get('message'),
-                details=error.get('details'),
+                error_code=failure.get('code'),
+                error_message=failure.get('message'),
+                details=failure.get('details'),
             )
 
         data = body.get('data')

@@ -307,6 +307,10 @@ Scheduled action
     creates a payment): the customer never got that payment's link. This needs an ePays server
     whose payment list filters by order reference; with an older one, nothing is voided.
 
+    It runs inside the Odoo server, not on a visitor's request, so a shop with no traffic needs
+    nothing more. It does need Odoo's cron: keep ``max_cron_threads`` above 0 on at least one server,
+    and that server running.
+
 Test mode, publishing and disabling
 ===================================
 
@@ -402,6 +406,14 @@ when *Send Customer Details* is on, the customer's name, email, phone and
 address. ePays returns the payment result, including masked card data (last four digits) and
 authorisation details, which Odoo stores on the transaction.
 
+Odoo's own privacy tools apply to this data: it is on the transaction and on the contact, as for
+any payment provider. To send ePays nothing about the customer, switch off *Send Customer Details*.
+
+See the ePays terms (https://epays.io/terms) and privacy policy
+(https://epays.io/privacy). *Find this server's IP address* asks ePays first, and only if it cannot
+tell, a public service: https://api.ipify.org, then https://icanhazip.com. Those calls carry no
+credential or customer data.
+
 Security
 ========
 
@@ -427,8 +439,8 @@ What the addon does:
   customer, notes it on the document, emails the company and leaves it on ePays to refund.
 * A charge that does not fit (a late one for another amount, or one above what is left to pay) is
   not recorded either, and holds the order or invoice: the other payments on it are stopped and no
-  new payment is taken until an administrator reviews it and clicks **Allow a New Payment** on the
-  transaction. Odoo emails the company address, so keep it filled in.
+  new payment is taken until an administrator, or staff who can edit those documents, reviews it
+  and clicks **Allow a New Payment** on the transaction. That charge is never recorded afterwards. Odoo emails the company address, so keep it filled in.
 * An order or invoice that is cancelled has its open payment link voided by the scheduled action,
   within 15 minutes, or 20 for a payment created moments before. If a customer pays in between, the
   charge is refused as above.
@@ -444,6 +456,10 @@ What the addon does:
   variable. Without one, Odoo's database secret is used, which is in the same database: only your
   own key protects them from a full copy of the database. If the key changes, the stored keys can no
   longer be read: the provider form says so, payments stop, and you enter them again.
+* To rotate the encryption key: set the new value, restart Odoo, then open the ePays provider of
+  each company and type its master keys again. ePays is not offered between the restart and that
+  step, so pick a quiet moment. Stored keys are not re-encrypted for you: the addon never keeps a
+  second key to read them with. To replace a master key itself, ask ePays for a new one.
 * The keys are never written to the server log or to an error message, even when a request fails.
   A key pasted with a space or a line break inside is refused when saved.
 * The keys are not copied when the provider is duplicated, and are cleared in neutralised copies of

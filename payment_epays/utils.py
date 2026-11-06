@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import math
 import re
 from datetime import datetime, timezone
 
@@ -129,33 +130,26 @@ def decrypt_secret(stored, key_material):
         return None
 
 
-def _fit_order_lines(items, decimals, per_unit):
-    """ Return the lines of the items, or `None` if a unit price does not divide its total.
+def _fit_order_line(item, decimals):
+    """ Return the line of an item, sent once with its total if a unit price cannot divide it.
 
-    :param list items: The items, see `get_order_lines`.
+    :param dict item: The item, see `get_order_lines`.
     :param int decimals: The decimals of the charged currency.
-    :param bool per_unit: Whether to send the real quantities, or one line per item.
-    :return: The lines, as ePays reads them.
-    :rtype: list[dict]|None
+    :return: The line, as ePays reads it.
+    :rtype: dict
     """
-    lines = []
-    for item in items:
-        quantity = item['quantity'] if per_unit else 1
-        unit_price, remainder = divmod(item['total'], quantity)
-        if remainder:
-            return None
-        name = item['name']
-        if not per_unit and item['quantity'] != 1:
-            name = f"{name} × {item['quantity']}"
-        line = {
-            'name': name[:const.TEXT_MAX_LENGTH],
-            'quantity': quantity,
-            'unitPrice': format_minor_units(unit_price, decimals),
-        }
-        if item.get('sku'):
-            line['sku'] = item['sku'][:const.TEXT_MAX_LENGTH]
-        lines.append(line)
-    return lines
+    name, quantity = item['name'], item['quantity']
+    unit_price, remainder = divmod(item['total'], quantity)
+    if remainder:
+        name, quantity, unit_price = f"{name} × {quantity}", 1, item['total']
+    line = {
+        'name': name[:const.TEXT_MAX_LENGTH],
+        'quantity': quantity,
+        'unitPrice': format_minor_units(unit_price, decimals),
+    }
+    if item.get('sku'):
+        line['sku'] = item['sku'][:const.TEXT_MAX_LENGTH]
+    return line
 
 
 def get_order_lines(items, shipping, charged, decimals):
@@ -178,7 +172,68 @@ def get_order_lines(items, shipping, charged, decimals):
         return None
     if shipping + sum(item['total'] for item in items) != charged:
         return None
-    return _fit_order_lines(items, decimals, True) or _fit_order_lines(items, decimals, False)
+    return [_fit_order_line(item, decimals) for item in items]
+
+
+def get_amount_mismatches(payment_data, amount, currency_name, decimals):
+    """ Return which of the amount and the currency ePays reports differ from the charge.
+
+    :param dict payment_data: The `data` of the v2 payment details.
+    :param float amount: The amount charged.
+    :param str currency_name: The currency charged.
+    :param int decimals: The decimals of the charged currency, at which amounts are compared.
+    :return: `amount` and/or `currency`, or an empty list if both match.
+    :rtype: list[str]
+    """
+    mismatches = []
+    try:
+        reported = float(payment_data.get('amount'))
+    except (TypeError, ValueError):
+        reported = None
+    if reported is None or not math.isfinite(reported) \
+            or to_minor_units(reported, decimals) != to_minor_units(amount, decimals):
+        mismatches.append('amount')
+    if str(payment_data.get('currency') or '').strip().upper() != currency_name:
+        mismatches.append('currency')
+    return mismatches
+
+
+def has_reference_mismatch(payment_data, udf2, udf3):
+    """ Return whether the references ePays reports differ from the ones sent.
+
+    The check is skipped when ePays does not return `customFields`.
+
+    :param dict payment_data: The `data` of the v2 payment details.
+    :param str udf2: The sales orders sent.
+    :param str udf3: The invoices sent.
+    :return: Whether a reference differs, after trimming.
+    :rtype: bool
+    """
+    custom_fields = payment_data.get('customFields')
+    if not isinstance(custom_fields, dict):
+        return False
+    return any(
+        str(custom_fields.get(key) or '').strip() != (sent_value or '').strip()
+        for key, sent_value in (('udf2', udf2), ('udf3', udf3))
+    )
+
+
+def get_api_failure(is_ok, body):
+    """ Return the `error` of a failed response of the ePays API.
+
+    A response fails on an HTTP error, a body that is not a JSON object, or the `ERROR` envelope,
+    which ePays can send with HTTP 200.
+
+    :param bool is_ok: Whether the HTTP status is a success.
+    :param body: The parsed body of the response, or `None` if it was not JSON.
+    :return: The `error` object, empty if ePays sent none, or `None` if the request succeeded.
+    :rtype: dict|None
+    """
+    is_object = isinstance(body, dict)
+    if is_ok and is_object and str(body.get('status', '')).upper() != 'ERROR':
+        return None
+    error = body.get('error') if is_object else None
+    return error if isinstance(error, dict) else {}
 
 
 def to_minor_units(amount, decimals):

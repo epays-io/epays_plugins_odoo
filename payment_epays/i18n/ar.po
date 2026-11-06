@@ -407,6 +407,32 @@ msgid "Merchant Domain"
 msgstr "نطاق التاجر"
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_lang
+msgid "ePays Page Language"
+msgstr "لغة صفحة ePays"
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_lang
+msgid ""
+"The language the ePays page was opened in, and the customer's messages follow."
+msgstr "اللغة التي فُتحت بها صفحة ePays، وتتبعها رسائل العميل."
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_rate_source
+msgid "Exchange Rate Source"
+msgstr "مصدر سعر الصرف"
+
+#. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_rate_source
+msgid "Where the exchange rate of a converted payment came from."
+msgstr "مصدر سعر الصرف لدفعة جرى تحويلها."
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_charge_refused
+msgid "Charge Refused"
+msgstr "خصم مرفوض"
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_review_needed
 msgid "Merchant Review Needed"
 msgstr "تتطلب مراجعة التاجر"
@@ -712,8 +738,8 @@ msgstr ""
 #. module: payment_epays
 #. odoo-python
 #: code:addons/payment_epays/models/payment_provider.py:0
-msgid "The ePays master keys cannot be searched, grouped or sorted."
-msgstr "لا يمكن البحث في المفاتيح الرئيسية لـ ePays أو تجميعها أو ترتيبها."
+msgid "The ePays master keys cannot be exported, searched, grouped or sorted."
+msgstr "لا يمكن تصدير المفاتيح الرئيسية لـ ePays أو البحث فيها أو تجميعها أو ترتيبها."
 
 #. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_payment_url
@@ -1015,6 +1041,16 @@ msgstr ""
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid ""
+"Your previous payment for this order could not be closed yet. Please try "
+"again in a few minutes."
+msgstr ""
+"تعذّر إغلاق دفعتك السابقة لهذا الطلب حتى الآن. يُرجى المحاولة مرة أخرى بعد "
+"بضع دقائق."
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_transaction.py:0
+msgid ""
 "Your previous payment for this order is still being confirmed. If you "
 "completed it, your order will update by itself, so please do not pay again. "
 "If you did not, you can try again in a few minutes."
@@ -1187,6 +1223,15 @@ msgstr ""
 "إضافة عنوان IP هذا إلى ترخيصك."
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_charge_refused
+msgid ""
+"ePays took this money and Odoo did not record it. It never will: refund it on "
+"ePays if it is not needed."
+msgstr ""
+"خصم ePays هذا المبلغ ولم يسجّله Odoo، ولن يسجّله أبدًا. ردّه عبر ePays إذا لم "
+"تكن بحاجة إليه."
+
+#. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_review_needed
 msgid ""
 "ePays took money that does not match the documents. No new payment can be "
@@ -1217,6 +1262,12 @@ msgstr "معرّف API والمفتاح الرئيسي لـ API مطلوبان."
 #: code:addons/payment_epays/models/payment_provider.py:0
 msgid "the API ID or the API master key is wrong."
 msgstr "معرّف API أو المفتاح الرئيسي لـ API غير صحيح."
+
+#. module: payment_epays
+#. odoo-python
+#: code:addons/payment_epays/models/payment_provider.py:0
+msgid "the API credentials are missing or cannot be read"
+msgstr "بيانات اعتماد واجهة API مفقودة أو تتعذّر قراءتها"
 
 #. module: payment_epays
 #. odoo-python

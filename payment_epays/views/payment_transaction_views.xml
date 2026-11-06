@@ -25,11 +25,15 @@
                         <field name="epays_expires_at"/>
                         <field name="epays_watch_until" invisible="not epays_watch_until"/>
                         <field name="epays_at_bank" invisible="not epays_at_bank"/>
+                        <field name="epays_charge_refused" invisible="not epays_charge_refused"/>
+                        <field name="epays_review_needed" invisible="not epays_review_needed"/>
                         <field name="epays_payment_url" widget="url" groups="base.group_system"/>
                         <field name="epays_gateway_requested"/>
+                        <field name="epays_lang"/>
                         <field name="epays_charged_amount"/>
                         <field name="epays_charged_currency_id" invisible="1"/>
                         <field name="epays_exchange_rate" invisible="epays_exchange_rate in (0, 1)"/>
+                        <field name="epays_rate_source" invisible="not epays_rate_source"/>
                         <field name="epays_udf2"/>
                         <field name="epays_udf3"/>
                     </group>
