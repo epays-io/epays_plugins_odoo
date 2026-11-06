@@ -3,6 +3,7 @@
 import json
 import os
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import requests
@@ -4065,12 +4066,28 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertGreaterEqual(failing.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
 
     def test_the_website_language_wins_over_the_contact_language(self):
-        """ The contact is in Arabic, the website in English: the page opens in English. """
+        """ `/payment/transaction` and the portal's route are not website routes: their context is
+        the session's language, the contact's. The cookie says which website the customer is on. """
         self._activate_arabic()
         self.partner.lang = 'ar_001'
+        for cookies, session_lang, expected in (
+            ({'frontend_lang': 'en_US'}, 'ar_001', 'en'),
+            ({'frontend_lang': 'ar_001'}, 'en_US', 'ar'),
+            ({}, 'ar_001', 'ar'),
+        ):
+            with self.subTest(cookies=cookies, session_lang=session_lang):
+                tx = self._create_transaction('redirect', reference=self._new_reference())
+                with patch(f'{TX_LOGGER}.request', SimpleNamespace(cookies=cookies), create=True):
+                    calls, _values = self._initiate(tx.with_context(lang=session_lang))
+                self.assertEqual(calls[-1]['payload']['lang'], expected)
+
+    def test_the_description_follows_the_website_language_too(self):
+        """ S20: "Order N" in the language of the page. """
+        self._activate_arabic()
         tx = self._create_transaction('redirect', reference=self._new_reference())
-        calls, _values = self._initiate(tx.with_context(lang='en_US'))
-        self.assertEqual(calls[-1]['payload']['lang'], 'en')
+        website_request = SimpleNamespace(cookies={'frontend_lang': 'en_US'})
+        with patch(f'{TX_LOGGER}.request', website_request, create=True):
+            self.assertEqual(tx.with_context(lang='ar_001')._epays_get_request_lang(), 'en_US')
 
     def test_s19_the_merchant_can_check_a_payment_at_any_age(self):
         """ S19: the replaced payments are read too. """

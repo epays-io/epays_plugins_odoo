@@ -13,6 +13,7 @@ from werkzeug import urls
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+from odoo.http import request
 from odoo.tools import SQL
 from odoo.tools.lru import LRU
 
@@ -408,7 +409,7 @@ class PaymentTransaction(models.Model):
         self._epays_lock_documents()
         environment = provider._epays_get_environment()
         gateway_id = self._epays_get_gateway_id(environment)
-        lang = self._epays_get_lang(self.env.context.get('lang'))
+        lang = self._epays_get_lang(self._epays_get_request_lang())
 
         self._epays_check_replaced_payments()
         # One live ePays payment per order: going back and paying again reuses the pending payment.
@@ -867,7 +868,7 @@ class PaymentTransaction(models.Model):
         base_url = provider.get_base_url()
         charged_amount, charged_currency, _rate = self._epays_get_charge()
         expires_at_epays = expires_at + const.EPAYS_TIMEZONE_OFFSET
-        lang = self._epays_get_lang(self.env.context.get('lang'))
+        lang = self._epays_get_lang(self._epays_get_request_lang())
 
         payload = {
             'amount': f'{charged_amount:.{charged_currency.decimal_places}f}',
@@ -1075,6 +1076,18 @@ class PaymentTransaction(models.Model):
             if code in installed_codes and code.startswith(epays_lang)
         ]
         return matching_codes[0] if matching_codes else self.env.lang
+
+    def _epays_get_request_lang(self):
+        """ Return the language of the website the customer is on, if this is their request.
+
+        `/payment/transaction` and the portal's transaction route are not website routes: their
+        context holds the session's language, which is the contact's. The website sets its
+        language in this cookie on every page it serves, so it also holds on those routes.
+
+        :return: The language code, or the context's without a cookie.
+        :rtype: str|None
+        """
+        return (request and request.cookies.get('frontend_lang')) or self.env.context.get('lang')
 
     def _epays_get_lang(self, preferred_lang=None):
         """ Return the language of the ePays payment page and messages: `en` or `ar`.

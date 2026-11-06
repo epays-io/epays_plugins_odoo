@@ -1,7 +1,7 @@
 # ePays for Odoo — what is left
 
 Status on 2026-11-06. The addon (`payment_epays` 18.0.1.0.8, not yet on the store) is
-feature-complete and tested: 280 tests with sales and accounting, 231 with the module alone,
+feature-complete and tested: 282 tests with sales and accounting, 233 with the module alone,
 lint clean, upgraded from 18.0.1.0.7. 18.0.1.0.8 fixes what the audit against `PLUGIN_CHECKLIST.md`
 found: a held charge is never applied, also after its release, failed reads count towards the
 public limit, and more. It also takes the WooCommerce plugin's last review fixes, see *Review fixes
@@ -25,12 +25,20 @@ methods.
 The plugin's last review changed shared payment logic, so each fix was checked against the addon.
 An independent review of the port then found seven more problems, fixed in the same version.
 
-Browser pass on `19f90a0`, the merge with the audit, against the local API: card payment, decline
-and retry, Back to Store, a void during 3-D Secure, a cancelled order's link voided by the cron, also
-at 3-D Secure, a slow 3-D Secure answer, a declined payment paid on its own link, the Arabic shop,
-and an Arabic contact on the English website, where the website's language wins: 10 of 10 scenarios
-pass. A payment at the bank is covered by mock tests only: ePays reports `inFlight` while the bank
-answers, not on 3-D Secure, so a browser cannot hold it there.
+Browser pass on `350f3b3` against the local API, with nothing else on the test card: card payment,
+decline and retry, Back to Store, a void during 3-D Secure, a cancelled order's link voided by the
+cron, also at 3-D Secure, a slow 3-D Secure answer, a declined payment paid on its own link and the
+Arabic shop all pass. Under load from other suites sharing the card, payments that should pass came
+back `Failed - Risk: REJECTED` from the gateway, whose limit is not understood: run card scenarios
+one suite at a time, spaced out.
+
+The `arabic` scenario found a real defect, and its earlier passes proved nothing, as a language set
+from another process had not reached the server's cache. `/payment/transaction` and the portal's
+route are not website routes, so a logged-in contact's language beat the website's. The page now
+follows the website's `frontend_lang` cookie: checked live, without a card, for English by default,
+English chosen and Arabic chosen. **Still to run with a card on this fix:** `arabic`, `arabic_shop`
+and a payment in each language. A payment at the bank is covered by mock tests only: ePays reports
+`inFlight` while the bank answers, not on 3-D Secure, so a browser cannot hold it there.
 
 | Fix | Here | Why |
 |---|---|---|
