@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0-20260908\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 05:41+0000\n"
-"PO-Revision-Date: 2026-11-06 05:41+0000\n"
+"POT-Creation-Date: 2026-11-06 05:46+0000\n"
+"PO-Revision-Date: 2026-11-06 05:46+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -715,6 +715,13 @@ msgid ""
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_read_failed_at
+msgid ""
+"The first scheduled read that failed since the last good one. The payment "
+"stays checked for at most three days from then."
+msgstr ""
+
+#. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_gateway_response
 msgid ""
 "The gateway response returned by ePays, as JSON. Card data is masked by "
@@ -1049,6 +1056,11 @@ msgstr ""
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_payment_url
 msgid "ePays Payment Page"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_read_failed_at
+msgid "ePays Read Failing Since"
 msgstr ""
 
 #. module: payment_epays

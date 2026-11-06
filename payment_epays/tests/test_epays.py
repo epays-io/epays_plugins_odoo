@@ -3936,6 +3936,91 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
             tx._handle_notification_data('epays', {'paymentId': tx.provider_reference})
         self.assertFalse(self._stuck_mails(tx))
 
+    def _run_cron_while_epays_is_down(self):
+        def unreachable(provider, method, path, **kwargs):
+            raise EpaysApiError("unreachable", connection_error="timed out", timed_out=True)
+
+        self._run_cron(unreachable)
+
+    def test_s30_a_failed_scheduled_read_keeps_a_watched_payment_watched(self):
+        """ An outage must not outlast the watch, or a late charge goes unread. """
+        now = fields.Datetime.now()
+        tx = self._old_tx('cancel', epays_watch_until=now + timedelta(minutes=1))
+        self._run_cron_while_epays_is_down()
+        self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
+        self.assertGreaterEqual(tx.epays_read_failed_at, now)
+
+    def test_s30_a_failed_scheduled_read_does_not_shorten_the_watch(self):
+        now = fields.Datetime.now()
+        limit = now + timedelta(days=2)
+        tx = self._old_tx('cancel', epays_watch_until=limit)
+        self._run_cron_while_epays_is_down()
+        self.assertEqual(tx.epays_watch_until, limit)
+
+    def test_s30_the_watch_ends_three_days_after_the_first_failure(self):
+        """ What stops a payment that can never be read being read for ever. """
+        now = fields.Datetime.now()
+        first_failure = now - const.CRON_MAX_AGE + timedelta(hours=1)
+        tx = self._old_tx(
+            'cancel', epays_watch_until=now + timedelta(minutes=1),
+            epays_read_failed_at=first_failure,
+        )
+        self._run_cron_while_epays_is_down()
+        self.assertEqual(tx.epays_watch_until, first_failure + const.CRON_MAX_AGE)
+        self.assertEqual(tx.epays_read_failed_at, first_failure, "Only the first one counts.")
+
+        tx.epays_read_failed_at = now - const.CRON_MAX_AGE - timedelta(hours=1)
+        tx.epays_watch_until = limit = now + timedelta(minutes=1)
+        self._run_cron_while_epays_is_down()
+        self.assertEqual(tx.epays_watch_until, limit, "Past the limit, the watch runs out.")
+
+    def test_s30_a_good_read_resets_the_failures(self):
+        now = fields.Datetime.now()
+        tx = self._old_tx(
+            'cancel', epays_watch_until=now + timedelta(minutes=1),
+            epays_read_failed_at=now - timedelta(days=2),
+        )
+        data = self._payment_data(tx, status='Voided', result='', transactionId=None)
+        self._run_cron(lambda *args, **kwargs: data)
+        self.assertFalse(tx.epays_read_failed_at)
+
+    def test_s30_a_payment_at_the_end_of_the_cron_window_joins_the_watched_ones(self):
+        now = fields.Datetime.now()
+        tx = self._create_epays_transaction(state='pending')
+        self._set_create_date(tx, now - const.CRON_MAX_AGE + timedelta(minutes=5))
+        self._run_cron_while_epays_is_down()
+        self.assertGreaterEqual(tx.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
+
+    def test_s30_a_payment_the_cron_reads_anyway_is_not_watched(self):
+        tx = self._create_epays_transaction(state='pending')
+        self._set_create_date(tx, fields.Datetime.now() - timedelta(hours=1))
+        self._run_cron_while_epays_is_down()
+        self.assertFalse(tx.epays_watch_until)
+        self.assertTrue(tx.epays_read_failed_at, "The limit counts from this failure.")
+
+    def test_s30_the_other_payments_are_still_read(self):
+        now = fields.Datetime.now()
+        failing = self._old_tx('cancel', epays_watch_until=now + timedelta(minutes=1))
+        readable = self._old_tx('cancel', epays_watch_until=now + timedelta(minutes=1))
+        data = self._payment_data(readable)
+
+        def handler(provider, method, path, **kwargs):
+            if path.endswith(failing.provider_reference):
+                raise EpaysApiError("unreachable", connection_error="timed out", timed_out=True)
+            return data
+
+        self._run_cron(handler)
+        self.assertEqual(readable.state, 'done')
+        self.assertGreaterEqual(failing.epays_watch_until, now + const.LATE_CHARGE_WINDOW)
+
+    def test_the_website_language_wins_over_the_contact_language(self):
+        """ The contact is in Arabic, the website in English: the page opens in English. """
+        self._activate_arabic()
+        self.partner.lang = 'ar_001'
+        tx = self._create_transaction('redirect', reference=self._new_reference())
+        calls, _values = self._initiate(tx.with_context(lang='en_US'))
+        self.assertEqual(calls[-1]['payload']['lang'], 'en')
+
     def test_s19_the_merchant_can_check_a_payment_at_any_age(self):
         """ S19: the replaced payments are read too. """
         self._skip_without_sale()

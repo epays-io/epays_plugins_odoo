@@ -128,6 +128,12 @@ class PaymentTransaction(models.Model):
         help="The scheduled check reads this payment until then, as ePays can still charge it.",
         readonly=True,
     )
+    epays_read_failed_at = fields.Datetime(
+        string="ePays Read Failing Since",
+        help="The first scheduled read that failed since the last good one. The payment stays "
+             "checked for at most three days from then.",
+        readonly=True,
+    )
     epays_review_needed = fields.Boolean(
         string="Merchant Review Needed",
         help="ePays took money that does not match the documents. No new payment can be made on "
@@ -1376,6 +1382,25 @@ class PaymentTransaction(models.Model):
         if not self._epays_is_read_by_cron():
             self._epays_watch_again()
 
+    def _epays_record_failed_read(self):
+        """ Keep a payment read through an outage of ePays, as a late charge would go unread if
+        the outage outlasted its watch. The limit from the first failure stops a payment that can
+        never be read being read for ever.
+
+        Note: self.ensure_one()
+
+        :return: None
+        """
+        self.ensure_one()
+        now = fields.Datetime.now()
+        if not self.epays_read_failed_at:
+            self.epays_read_failed_at = now
+        if self._epays_is_read_by_cron():
+            return
+        limit = min(now + const.LATE_CHARGE_WINDOW, self.epays_read_failed_at + const.CRON_MAX_AGE)
+        if not self.epays_watch_until or self.epays_watch_until < limit:
+            self.epays_watch_until = limit
+
     def _epays_is_read_by_cron(self):
         """ Return whether the scheduled check's next run reads this transaction's payment.
 
@@ -1476,7 +1501,10 @@ class PaymentTransaction(models.Model):
         :return: The `data` of the v2 payment details.
         :rtype: dict
         """
-        return self._epays_request_payment('GET')
+        payment_data = self._epays_request_payment('GET')
+        if self.epays_read_failed_at:
+            self.epays_read_failed_at = False
+        return payment_data
 
     def _epays_apply_or_hand_back(self, payment_data):
         """ Apply the payment details, or give the payment to the scheduled check if that fails,
@@ -2087,6 +2115,11 @@ class PaymentTransaction(models.Model):
                     "could not check the ePays payment of transaction %s: %s", reference, error
                 )
                 self.env.cr.rollback()
+                try:
+                    tx._epays_record_failed_read()
+                    self.env.cr.commit()
+                except psycopg2.OperationalError:
+                    self.env.cr.rollback()  # The next run fails on it again.
             except Exception:  # noqa: BLE001 - one failing transaction must not stop the others.
                 _logger.exception(
                     "encountered an error while checking the ePays payment of transaction %s",

@@ -779,6 +779,13 @@ msgstr ""
 "إذا تغيّر."
 
 #. module: payment_epays
+#: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_read_failed_at
+msgid ""
+"The first scheduled read that failed since the last good one. The payment "
+"stays checked for at most three days from then."
+msgstr "أول قراءة مجدولة فشلت منذ آخر قراءة ناجحة. تبقى الدفعة قيد المتابعة لمدة ثلاثة أيام كحد أقصى من ذلك الوقت."
+
+#. module: payment_epays
 #: model:ir.model.fields,help:payment_epays.field_payment_transaction__epays_gateway_response
 msgid ""
 "The gateway response returned by ePays, as JSON. Card data is masked by "
@@ -1132,6 +1139,11 @@ msgstr "معرّف الدفع في ePays"
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_payment_url
 msgid "ePays Payment Page"
 msgstr "صفحة الدفع في ePays"
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_read_failed_at
+msgid "ePays Read Failing Since"
+msgstr "فشل قراءة ePays منذ"
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_transaction_id
