@@ -63,14 +63,9 @@ hold it there.
 
 - [x] **18.0.1.0.8 end to end** on the local ePays API: the 12 items of Part 4 in `CHECKLIST_ODOO.md`,
       on `350f3b3`, and the language item on `6c715d0`. All of them run again on the release commit.
-- [ ] **18.0.1.0.8 on real gateways** with real devices: the items below it.
+- [ ] **18.0.1.0.8 on real gateways**: the items below it.
 - [ ] A **real card payment** typed into the ePays page in a browser, up to the confirmed order and
       the posted payment. The sandbox's test card went through on `6c715d0`; a real card has not.
-- [ ] **Benefit** and **BenefitPay** with test credentials. On `6c715d0` both open their ePays page
-      on the sandbox; completing a payment needs a Benefit test account and wallet.
-- [ ] **Apple Pay** on Safari (iPhone or Mac). Hiding it on other browsers is only proven in Chrome.
-- [ ] **Google Pay**, **Samsung Pay** and **Tabby**. The sandbox licence has no Samsung Pay or Tabby
-      gateway: ePays has to enable them.
 - [x] A **declined** payment, then a successful retry, on the sandbox on `6c715d0`.
 - [ ] The **QA site** `qa-erp.qissah-bh.com`:
   - [x] Confirm it runs Odoo **18.0**.

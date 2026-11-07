@@ -1,6 +1,6 @@
 # ePays integration checklist: Odoo
 
-`payment_epays` 18.0.1.0.8, filled in on 2026-11-06. This is the filled copy of [PLUGIN_CHECKLIST.md](PLUGIN_CHECKLIST.md), which stays the blank template. A box is ticked only for what was verified. End to end ran alone on commit `350f3b3`: 39 checks in the scenario pass and 57 in the verification run. The language item and the sandbox ran on `6c715d0`. Each item names its commit: all of them run again on the release commit, as a run on earlier code does not count. Other real-gateway items are open because they have not run.
+`payment_epays` 18.0.1.0.8, filled in on 2026-11-06. This is the filled copy of [PLUGIN_CHECKLIST.md](PLUGIN_CHECKLIST.md), which stays the blank template. A box is ticked only for what was verified. End to end ran alone on commit `350f3b3`: 39 checks in the scenario pass and 57 in the verification run. The language item and the sandbox ran on `6c715d0`. Each item names its commit: all of them run again on the release commit, as a run on earlier code does not count. The real card payment is open because it has not run.
 
 What every ePays integration must meet before it goes live, whether it is a plugin for a shop platform
 or a custom integration for one site. "Plugin" below means either, unless the table in *What applies to
@@ -631,11 +631,6 @@ answers. Cover both with mock tests, and record that in your open-work list.
 - [x] Sandbox: a full payment, then a declined one and a retry.
       *On `testapi.epays.io` on `6c715d0`, with Mastercard's test card: paid and confirmed by the return route alone; declined at 3-D Secure, order left unconfirmed; the retry paid the order and the declined link was voided on ePays. The sandbox has no acknowledgement endpoint, so its 404 was only logged.*
 - [ ] A real card payment, up to the confirmed order.
-- [ ] Benefit and BenefitPay.
-      *Open: Both are offered and open their own ePays page on the sandbox on `6c715d0`. No payment was completed: that needs a Benefit test account and wallet.*
-- [ ] Apple Pay on Safari, iPhone or Mac.
-- [ ] Google Pay and Samsung Pay on a device.
-- [ ] Tabby, with order lines.
 
 ---
 

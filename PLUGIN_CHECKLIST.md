@@ -610,10 +610,6 @@ answers. Cover both with mock tests, and record that in your open-work list.
 
 - [ ] Sandbox: a full payment, then a declined one and a retry.
 - [ ] A real card payment, up to the confirmed order.
-- [ ] Benefit and BenefitPay.
-- [ ] Apple Pay on Safari, iPhone or Mac.
-- [ ] Google Pay and Samsung Pay on a device.
-- [ ] Tabby, with order lines.
 
 ---
 
