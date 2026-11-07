@@ -62,7 +62,7 @@ hold it there.
 ## 1. Tests still to do
 
 - [x] **18.0.1.0.8 end to end** on the local ePays API: the 12 items of Part 4 in `CHECKLIST_ODOO.md`,
-      on `350f3b3`, and the language item on `6c715d0`. All of them run again on the release commit.
+      on tag `18.0.1.0.8` (`a982653`), 102 checks, and installed on a fresh site from its package.
 - [ ] **18.0.1.0.8 on real gateways**: the items below it.
 - [ ] A **real card payment** typed into the ePays page in a browser, up to the confirmed order and
       the posted payment. The sandbox's test card went through on `6c715d0`; a real card has not.

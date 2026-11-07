@@ -1,6 +1,6 @@
 # ePays integration checklist: Odoo
 
-`payment_epays` 18.0.1.0.8, filled in on 2026-11-06. This is the filled copy of [PLUGIN_CHECKLIST.md](PLUGIN_CHECKLIST.md), which stays the blank template. A box is ticked only for what was verified. End to end ran alone on commit `350f3b3`: 39 checks in the scenario pass and 57 in the verification run. The language item and the sandbox ran on `6c715d0`. Each item names its commit: all of them run again on the release commit, as a run on earlier code does not count. The real card payment is open because it has not run.
+`payment_epays` 18.0.1.0.8, filled in on 2026-11-06. This is the filled copy of [PLUGIN_CHECKLIST.md](PLUGIN_CHECKLIST.md), which stays the blank template. A box is ticked only for what was verified. End to end ran alone on tag `18.0.1.0.8` (`a982653`): 102 checks, no failure. The sandbox ran on `6c715d0`, with the same addon code. The real card payment is open because it has not run.
 
 What every ePays integration must meet before it goes live, whether it is a plugin for a shop platform
 or a custom integration for one site. "Plugin" below means either, unless the table in *What applies to
@@ -598,30 +598,30 @@ does not count. Items marked *newer server* need an ePays API with `inFlight`: a
 them.
 
 - [x] Payment approved, in each checkout type.
-      *Shop, order payment link, portal order and invoice. Verification run on `350f3b3`.*
+      *Shop, order payment link, portal order and invoice. Verification run on `18.0.1.0.8`.*
 - [x] Declined, then retried on the same document (S4).
-      *`decline_then_retry`, alone on `350f3b3`.*
+      *`decline_then_retry`, alone on `18.0.1.0.8`.*
 - [x] Back to store from the ePays page.
-      *`back_to_store`, alone on `350f3b3`.*
+      *`back_to_store`, alone on `18.0.1.0.8`.*
 - [x] Customer's language: English, Arabic, a bilingual site.
-      *The defect found on `350f3b3` is fixed: `arabic`, `arabic_shop` and a paid order in each language, for a contact in the other one, on `6c715d0`: 12 of 12 checks.*
+      *The defect found on `350f3b3` is fixed: `arabic`, `arabic_shop` and a paid order in each language, for a contact in the other one, on `18.0.1.0.8`: 12 of 12 checks.*
 - [x] Payment in another currency.
-      *A USD order charged in BHD at Odoo's rate of the day. Verification run on `350f3b3`.*
+      *A USD order charged in BHD at Odoo's rate of the day. Verification run on `18.0.1.0.8`.*
 - [x] A single method opening its own form.
-      *The Card method's page offers no other method, and the payment went through its gateway. Verification run on `350f3b3`.*
+      *The Card method's page offers no other method, and the payment went through its gateway. Verification run on `18.0.1.0.8`.*
 - [x] *Newer server:* voided during 3-D Secure, paid with another method: the charge is withheld, the
       replacement pays.
-      *`void_during_3ds`, alone on `350f3b3`.*
+      *`void_during_3ds`, alone on `18.0.1.0.8`.*
 - [x] Document cancelled with an open link, also at 3-D Secure (S8).
-      *`cancelled_order_open_link` and `cancelled_during_3ds`, alone on `350f3b3`.*
+      *`cancelled_order_open_link` and `cancelled_during_3ds`, alone on `18.0.1.0.8`.*
 - [x] A slow 3-D Secure answer.
-      *`slow_3ds_answer`, alone on `350f3b3`.*
+      *`slow_3ds_answer`, alone on `18.0.1.0.8`.*
 - [x] A payment request answered too late, with its orphan voided.
-      *ePays really created the payment; a test proxy held back only its answer. The orphan was voided, and the customer's own payment stayed open and paid the order. Verification run on `350f3b3`.*
+      *ePays really created the payment; a test proxy held back only its answer. The orphan was voided, and the customer's own payment stayed open and paid the order. Verification run on `18.0.1.0.8`.*
 - [x] Master key entered, saved, stored encrypted, and absent from pages and logs.
-      *A random canary typed into the form: stored with `epays1:`, and absent from the page source, every response, the server log and a full database dump. Verification run on `350f3b3`.*
+      *A random canary typed into the form: stored with `epays1:`, and absent from the page source, every response, the server log and a full database dump. Verification run on `18.0.1.0.8`.*
 - [x] Install on a fresh site from the release package.
-      *Activated through Apps from a zip of `350f3b3`, without tests. No errors logged. The package is not tagged yet.*
+      *Activated through Apps from the zip of tag `18.0.1.0.8`, without tests. No errors logged.*
 
 Late charges cannot be forced on a newer server, and a real at-bank state lasts only while the bank
 answers. Cover both with mock tests, and record that in your open-work list.
@@ -629,7 +629,7 @@ answers. Cover both with mock tests, and record that in your open-work list.
 ### On real gateways
 
 - [x] Sandbox: a full payment, then a declined one and a retry.
-      *On `testapi.epays.io` on `6c715d0`, with Mastercard's test card: paid and confirmed by the return route alone; declined at 3-D Secure, order left unconfirmed; the retry paid the order and the declined link was voided on ePays. The sandbox has no acknowledgement endpoint, so its 404 was only logged.*
+      *On `testapi.epays.io` on `6c715d0`, whose addon code is the tag's, with Mastercard's test card: paid and confirmed by the return route alone; declined at 3-D Secure, order left unconfirmed; the retry paid the order and the declined link was voided on ePays. The sandbox has no acknowledgement endpoint, so its 404 was only logged.*
 - [ ] A real card payment, up to the confirmed order.
 
 ---
@@ -697,19 +697,19 @@ Each row needs a test named after the scenario, with this outcome. The test name
 
 ### Before release
 
-- [ ] A scan of the package, logs and diffs finds no key.
-      *Open: The repository is clean; no package is built yet.*
-- [ ] Development files stay out of the package: tests, tooling, and internal notes.
-      *Open: The release command in `CLAUDE.md` now leaves `tests/` out. No package is built yet. The store takes the module folder as it is on the branch.*
-- [ ] The package is built from the tagged commit, and installed on a fresh site.
-      *Open: Needs the commit and the tag.*
-- [ ] All scenarios pass on the final code.
-      *Open: They pass on the working tree; the final code is the release commit.*
+- [x] A scan of the package, logs and diffs finds no key.
+      *Gitleaks on the package, the logs of the run and the git history, and the sandbox master key searched for by its value: nothing found.*
+- [x] Development files stay out of the package: tests, tooling, and internal notes.
+      *49 files, with no tests, tooling or internal notes. The store takes the module folder as it is on the branch, tests included.*
+- [x] The package is built from the tagged commit, and installed on a fresh site.
+      *`payment_epays-18.0.1.0.8.zip`, from tag `18.0.1.0.8` (`a982653`), and installed on a fresh site.*
+- [x] All scenarios pass on the final code.
+      *102 checks with no failure on tag `18.0.1.0.8`, against the local ePays API, each scenario alone.*
 - [ ] Arabic reviewed by a native speaker.
       *Open: See `REMAINING.md`.*
 - [ ] **Release order checked:** a plugin that handles a new ePays API goes out **before** that API
       reaches production.
-      *Open: 18.0.1.0.8 is not published yet: see `REMAINING.md`.*
+      *Open: `18.0` is pushed, but nothing confirms the store has published it yet.*
 
 ### After release
 
