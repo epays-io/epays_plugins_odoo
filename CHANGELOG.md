@@ -32,6 +32,9 @@ Security and privacy:
 
 Customers and staff:
 
+- The ePays page follows the website's language on every route. Before, a logged-in contact's own
+  language won on the payment and portal routes, so an Arabic contact on the English website got an
+  Arabic page.
 - A void ePays refuses is no longer reported to the customer as a connection failure.
 - Staff who can edit every document on a transaction can use *Allow a New Payment*, not only
   administrators.

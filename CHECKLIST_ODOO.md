@@ -722,8 +722,8 @@ Each row needs a test named after the scenario, with this outcome. The test name
       *Open: After release.*
 - [ ] A real payment on a production shop, with production keys.
       *Open: After release.*
-- [ ] A new platform plugin is added to the other integrations' developer guides, and to this file.
-      *Open: Odoo is not new: it is in the WooCommerce guide.*
+- [N/A] A new platform plugin is added to the other integrations' developer guides, and to this file.
+      *N/A: Odoo is not new: it is in the WooCommerce guide.*
 
 ### Onboard each merchant
 
