@@ -71,6 +71,11 @@ hold it there.
       (`udf3`, `q`, date window), read no payment, voided and acknowledged the orphan, and left the
       retry pending. The list alone: `udf3` returns only the invoice's payment, `q` alone also
       `INV/…3`, as an older server would.
+- [x] **Upgrade from 18.0.1.0.8** (2026-11-16, with sales and accounting, one filestore throughout):
+      `-u payment_epays` runs without warning, adds `udf3` and drops `udf2`'s NOT NULL. The
+      provider settings, both master keys (encrypted by 18.0.1.0.8, still read) and an order's
+      unanswered request survive; an invoice's request is then recorded with no `udf2`. 286 tests
+      pass on the upgraded database.
 - [ ] A **real card payment** typed into the ePays page in a browser, up to the confirmed order and
       the posted payment. The sandbox's test card went through on `6c715d0`; a real card has not.
 - [x] A **declined** payment, then a successful retry, on the sandbox on `6c715d0`.
