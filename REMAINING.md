@@ -72,7 +72,8 @@ hold it there.
       retry pending. The list alone: `udf3` returns only the invoice's payment, `q` alone also
       `INV/…3`, as an older server would.
 - [x] **Upgrade from 18.0.1.0.8** (2026-11-16, with sales and accounting, one filestore throughout):
-      `-u payment_epays` runs without warning, adds `udf3` and drops `udf2`'s NOT NULL. The
+      `-u payment_epays` runs without warning, adds `udf3` and replaces `udf2`'s NOT NULL with a
+      check that `udf2` or `udf3` is set (a row with neither is refused). The
       provider settings, both master keys (encrypted by 18.0.1.0.8, still read) and an order's
       unanswered request survive; an invoice's request is then recorded with no `udf2`. 286 tests
       pass on the upgraded database.

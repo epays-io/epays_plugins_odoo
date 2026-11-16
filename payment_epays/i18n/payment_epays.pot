@@ -127,6 +127,13 @@ msgid ""
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.constraint,message:payment_epays.constraint_payment_epays_unanswered_request_documents_required
+msgid ""
+"An unanswered ePays payment request needs a sales order or invoice "
+"reference."
+msgstr ""
+
+#. module: payment_epays
 #: model:payment.method,name:payment_epays.payment_method_epays_apple_pay
 #: model:payment.method,name:payment_epays.payment_method_epays_brand_apple_pay
 msgid "Apple Pay"

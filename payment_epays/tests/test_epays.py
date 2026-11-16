@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlsplit
 import requests
 from freezegun import freeze_time
 from lxml import etree, objectify
-from psycopg2 import pool
+from psycopg2 import IntegrityError, pool
 from psycopg2.errors import SerializationFailure
 
 from odoo import Command, fields
@@ -2996,6 +2996,13 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(len([method for method, _path in calls if method == 'GET']), 1,
                          "Only the list is read.")
         self.assertFalse(request.exists())
+
+    def test_an_unanswered_request_needs_a_document_reference(self):
+        """ The cleanup lists a payment by `udf2` or `udf3`: a request with neither is refused. """
+        for udf2, udf3 in (('S00001', ''), ('', 'INV/2026/00015')):
+            self.assertTrue(self._unanswered(udf2, udf3=udf3))
+        with self.assertRaises(IntegrityError), mute_logger('odoo.sql_db'):
+            self._unanswered('', udf3=False)
 
     def test_a_failed_read_of_an_invoice_orphan_voids_nothing(self):
         """ The payments are all read before any is voided: the next run starts over. """

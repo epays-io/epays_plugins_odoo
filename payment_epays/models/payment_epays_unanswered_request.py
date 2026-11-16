@@ -42,6 +42,13 @@ class PaymentEpaysUnansweredRequest(models.Model):
     udf3 = fields.Char(string="Invoice References")
     reference = fields.Char(string="Transaction Reference")
 
+    # Without either, the payment cannot be listed: `udf2` was required before invoices were.
+    _sql_constraints = [(
+        'documents_required',
+        "CHECK(COALESCE(udf2, '') != '' OR COALESCE(udf3, '') != '')",
+        "An unanswered ePays payment request needs a sales order or invoice reference.",
+    )]
+
     @api.model
     def _epays_record(self, tx, environment, domain, custom_fields):
         """ Record a payment request ePays answered too late, in its own database transaction.
@@ -248,7 +255,7 @@ class PaymentEpaysUnansweredRequest(models.Model):
 
     def _epays_is_invoice_orphan(self, payment_id):
         """ Return whether ePays's own details show the payment as a pending one of the request's
-        invoices, with no sales order.
+        invoices, with no sales order: for a server that does not list `udf3`.
 
         Note: self.ensure_one()
 
