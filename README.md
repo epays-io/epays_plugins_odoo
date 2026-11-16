@@ -253,6 +253,7 @@ sudo systemctl start odoo
 
 | Version | Changes | Update notes |
 |---|---|---|
+| 18.0.1.0.9 | A payment ePays creates after Odoo stopped waiting is voided for invoices paid without sales order too, not only for orders | Run the update: it adds a column to `payment_epays_unanswered_request`. |
 | 18.0.1.0.8 | The audit fixes in [CHANGELOG.md](CHANGELOG.md): a held or refused charge is never recorded afterwards, two clicks cannot create two payments, failed ePays reads count towards the public limit, staff who can edit an order can release it | Run the update: it adds columns to `payment_transaction`. Charges already refused are marked as such. |
 | 18.0.1.0.7 | Master keys encrypted in the database; same payment logic as the WooCommerce plugin | Needs the Python `cryptography` package, which the official `odoo:18` image includes. Set `epays_encryption_key` in `odoo.conf` before updating if you want your own key: changing it later means entering the master keys again. |
 | 18.0.1.0.6 | Payments acknowledged on ePays; late charges followed | |

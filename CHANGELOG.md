@@ -2,6 +2,14 @@
 
 Each version is for Odoo 18.0. Update notes are in [README.md](README.md#version-history).
 
+## 18.0.1.0.9
+
+- A payment ePays creates after Odoo stopped waiting for its answer is now voided for an invoice
+  paid without sales order too, not only for an order. An ePays server of 2026-11-16 or later
+  filters and lists payments by `udf3`, as by `udf2`. On an older one the invoice is found by
+  ePays's free-text search, and each payment created around the request is read to confirm it is
+  the invoice's before it is voided.
+
 ## 18.0.1.0.8
 
 Fixes from the audit against `PLUGIN_CHECKLIST.md`.

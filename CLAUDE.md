@@ -67,8 +67,13 @@ early for other providers.
      `payment` alone and cannot extend the cancellation of an order.
   5. A payment request that times out (`const.PAYMENT_REQUEST_TIMEOUT`) is rolled back, but ePays
      may still create the payment. `payment.epays.unanswered.request` records it in its own cursor
-     (it must survive the rollback), and the cron voids the order's pending payments that no
-     transaction holds (`GET /api/v2/Payments?status=pending&udf2=…`). Each attempt has its own
+     (it must survive the rollback), and the cron voids the documents' pending payments that no
+     transaction holds: an order's by `GET /api/v2/Payments?status=pending&udf2=…`; an invoice's
+     (no order) by exact `udf3` and the free-text search `q`, which needs `fromDate`/`toDate`. ePays
+     filters and lists `udf3` since 2026-11-16, and the listed value is trusted as `udf2` is. An
+     older server ignores the filter, its `q` matches other invoices too, and it lists no `udf3`:
+     only payments created around the request are read there
+     (`UNANSWERED_REQUEST_CREATION_MARGIN`) and voided if their own `udf3` is the invoice's. Each attempt has its own
      idempotency key (`_epays_get_idempotency_key`): the rolled-back reference comes back. Tests
      for it cannot use Odoo's `assertRaises`, which rolls the separate cursor's write back too.
   6. `_post_process` registers a commit hook, `_epays_close_on_epays`, because `account_payment`
@@ -243,4 +248,5 @@ undone pickings and invoices.
   Classic and Blocks; multi-currency adapters; the privacy eraser; the hold-stock guard; a
   cancelled order's thank-you text (Odoo's status page shows the payment as cancelled).
 - Odoo only: the merchant domain as a setting (several websites); multi-document `udf2`/`udf3`;
-  orphan cleanup limited to orders (ePays lists by `udf2`); multi-company; neutralize.
+  orphan cleanup of invoices paid without order (by `udf3`, also through ePays's text search);
+  multi-company; neutralize.

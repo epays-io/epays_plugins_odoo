@@ -201,6 +201,12 @@ PAYMENT_ID_PATTERN = r'^[A-Za-z0-9_-]{1,64}$'
 # voids it once no click can still be waiting for it, and gives up after the maximum age.
 UNANSWERED_REQUEST_MIN_AGE = timedelta(minutes=2)
 UNANSWERED_REQUEST_MAX_AGE = timedelta(days=1)
+# On an ePays server that does not list `udf3` (before 2026-11-16), an invoice's orphan is found by
+# a search that can match many payments: only one ePays created this close to when the request was
+# recorded is read, and voided if it is the invoice's.
+UNANSWERED_REQUEST_CREATION_MARGIN = timedelta(minutes=5)
+# The longest free-text search (`q`) ePays accepts on `GET /api/v2/Payments`.
+PAYMENT_SEARCH_MAX_LENGTH = 100
 # Finished transactions are post-processed by the cron for this long after their last state change.
 CRON_POST_PROCESS_LIMIT = timedelta(days=4)
 

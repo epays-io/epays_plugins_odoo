@@ -346,6 +346,11 @@ msgid "Invoice %s"
 msgstr "الفاتورة %s"
 
 #. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__udf3
+msgid "Invoice References"
+msgstr "مراجع الفواتير"
+
+#. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_udf3
 msgid "Invoices Sent (udf3)"
 msgstr "الفواتير المرسلة (udf3)"

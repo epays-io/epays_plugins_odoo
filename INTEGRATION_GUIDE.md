@@ -889,6 +889,20 @@ curl -sS --max-time 10 "$EPAYS_URL/api/v2/Payments?status=pending&udf2=1001&limi
   -H "Accept: application/json"
 ```
 
+Find the pending payments of an invoice. Since 2026-11-16 `udf3` is an exact filter and each item
+carries `udf3`. An older server ignores the filter and lists no `udf3`, so also send the invoice
+number as `q`, which needs both `fromDate` and `toDate` (at most 93 days apart) and also matches
+other columns and other invoices: on such a server, read each payment found and compare its
+`customFields.udf3` before acting on it.
+
+```sh
+curl -sS --max-time 10 "$EPAYS_URL/api/v2/Payments?status=pending&udf3=INV%2F2026%2F00012&q=INV%2F2026%2F00012&fromDate=2026-11-15&toDate=2026-11-17&limit=100" \
+  -H "X-Api-Id: $EPAYS_API_ID" \
+  -H "X-Api-Master-Key: $EPAYS_MASTER_KEY" \
+  -H "X-Merchant-Domain: $EPAYS_DOMAIN" \
+  -H "Accept: application/json"
+```
+
 List what has not been acknowledged:
 
 ```sh
@@ -907,10 +921,14 @@ Parameters:
 | `cursor` | `nextCursor` of the previous page |
 | `status` | `pending`, `completed`, `failed`, `error`, `cancelled`, `refunded`, `expired` or `voided` |
 | `udf2` | Exact order reference |
+| `udf3` | Exact invoice reference. Since 2026-11-16; ignored by older servers |
+| `q` | Free text, at most 100 characters, matched (contains) against `udf1` to `udf5`, ids, customer and description. Needs `fromDate` and `toDate` |
+| `fromDate`, `toDate` | `yyyy-MM-dd` or a date-time; `toDate` as a date includes the whole day |
 | `acknowledged` | `true` or `false` |
 
 `data` holds `payments`, `limit`, `hasMore` and `nextCursor`. Each item has `paymentId`, `status`,
-`amount`, `currency`, `udf2`, `subscriptionId`, `inFlight` and more.
+`amount`, `currency`, `udf1` to `udf5` (`udf3` to `udf5` since 2026-11-16), `subscriptionId`,
+`inFlight` and more.
 
 ### `GET /api/v2/gateways`
 

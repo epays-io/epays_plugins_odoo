@@ -304,8 +304,12 @@ Scheduled action
     whose customer closed the browser, voids expired unpaid payment links, and finishes the Odoo
     post-processing of ePays payments even when no provider is enabled any more. It also voids the
     payment ePays may create for a request it answered too late (Odoo waits 30 seconds when it
-    creates a payment): the customer never got that payment's link. This needs an ePays server
-    whose payment list filters by order reference; with an older one, nothing is voided.
+    creates a payment): the customer never got that payment's link. It finds an order's payment by
+    the order reference, and an invoice paid without sales order by the invoice number, reading
+    each payment created around the request to confirm it is that invoice's. This needs an ePays
+    server whose payment list filters by order reference and searches by text; with an older one,
+    nothing is voided. An ePays server of 2026-11-16 or later also filters and lists payments by
+    invoice number, which spares those reads.
 
     It runs inside the Odoo server, not on a visitor's request, so a shop with no traffic needs
     nothing more. It does need Odoo's cron: keep ``max_cron_threads`` above 0 on at least one server,

@@ -440,7 +440,7 @@ class PaymentTransaction(models.Model):
         except EpaysApiError as error:
             if error.timed_out:  # ePays may still create the payment: void it later.
                 self.env['payment.epays.unanswered.request']._epays_record(
-                    self, environment, domain, payload['customFields']['udf2']
+                    self, environment, domain, payload['customFields']
                 )
             raise
 
