@@ -144,6 +144,13 @@ msgstr ""
 "حالته على الاختبار."
 
 #. module: payment_epays
+#: model:ir.model.constraint,message:payment_epays.constraint_payment_epays_unanswered_request_documents_required
+msgid ""
+"An unanswered ePays payment request needs a sales order or invoice "
+"reference."
+msgstr "يحتاج طلب دفع ePays الذي لم تتم الإجابة عليه إلى مرجع أمر بيع أو فاتورة."
+
+#. module: payment_epays
 #: model:payment.method,name:payment_epays.payment_method_epays_apple_pay
 #: model:payment.method,name:payment_epays.payment_method_epays_brand_apple_pay
 msgid "Apple Pay"
@@ -344,6 +351,11 @@ msgstr "المعرّف"
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "Invoice %s"
 msgstr "الفاتورة %s"
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__udf3
+msgid "Invoice References"
+msgstr "مراجع الفواتير"
 
 #. module: payment_epays
 #: model:ir.model.fields,field_description:payment_epays.field_payment_transaction__epays_udf3

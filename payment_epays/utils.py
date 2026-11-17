@@ -101,6 +101,7 @@ def read_payment(data):
         'udf2': custom_fields.get('udf2'),
         'udf3': custom_fields.get('udf3'),
         'listed_udf2': data.get('udf2'),
+        'listed_udf3': data.get('udf3'),  # Listed since 2026-11-16: `None` on an older server.
     }
 
 

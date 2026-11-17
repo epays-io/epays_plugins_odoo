@@ -127,6 +127,13 @@ msgid ""
 msgstr ""
 
 #. module: payment_epays
+#: model:ir.model.constraint,message:payment_epays.constraint_payment_epays_unanswered_request_documents_required
+msgid ""
+"An unanswered ePays payment request needs a sales order or invoice "
+"reference."
+msgstr ""
+
+#. module: payment_epays
 #: model:payment.method,name:payment_epays.payment_method_epays_apple_pay
 #: model:payment.method,name:payment_epays.payment_method_epays_brand_apple_pay
 msgid "Apple Pay"
@@ -330,6 +337,11 @@ msgstr ""
 #. odoo-python
 #: code:addons/payment_epays/models/payment_transaction.py:0
 msgid "Invoice %s"
+msgstr ""
+
+#. module: payment_epays
+#: model:ir.model.fields,field_description:payment_epays.field_payment_epays_unanswered_request__udf3
+msgid "Invoice References"
 msgstr ""
 
 #. module: payment_epays

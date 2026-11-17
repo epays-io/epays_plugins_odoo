@@ -5,11 +5,12 @@ import os
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs, urlsplit
 
 import requests
 from freezegun import freeze_time
 from lxml import etree, objectify
-from psycopg2 import pool
+from psycopg2 import IntegrityError, pool
 from psycopg2.errors import SerializationFailure
 
 from odoo import Command, fields
@@ -2784,11 +2785,12 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
 
     #=== A payment request ePays answered too late ===#
 
-    def _unanswered(self, udf2, age=timedelta(minutes=10)):
+    def _unanswered(self, udf2, age=timedelta(minutes=10), udf3=''):
         """ An unanswered request recorded `age` ago. """
         request = self.env['payment.epays.unanswered.request'].create({
             'provider_id': self.provider.id, 'environment': 'sandbox',
-            'merchant_domain': 'shop.example.com', 'udf2': udf2, 'reference': udf2,
+            'merchant_domain': 'shop.example.com', 'udf2': udf2, 'udf3': udf3,
+            'reference': udf2 or udf3,
         })
         self.env.cr.execute(
             "UPDATE payment_epays_unanswered_request SET create_date = %s WHERE id = %s",
@@ -2797,11 +2799,17 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         request.invalidate_recordset(['create_date'])
         return request
 
-    def _run_orphan_cron(self, listing=None, list_error=None, void_error=None):
+    def _run_orphan_cron(self, listing=None, list_error=None, void_error=None, details=None):
+        """ Run the orphan cleanup; `details` maps a payment id to its details, or to an error. """
         calls = []
 
         def handler(provider, method, path, **kwargs):
             calls.append((method, path))
+            if method == 'GET' and '?' not in path:  # The details of one payment.
+                answer = details[path.rsplit('/', 1)[1]]
+                if isinstance(answer, Exception):
+                    raise answer
+                return answer
             if method == 'GET' and list_error:
                 raise list_error
             if method == 'DELETE' and void_error:
@@ -2906,6 +2914,112 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         ]})
         self.assertEqual([method for method, _path in calls], ['GET'])
         self.assertFalse(request.exists())
+
+    def test_the_cron_voids_the_payment_left_by_an_unanswered_invoice_request(self):
+        """ Without sales order, the invoice is looked up by its exact `udf3`, which a server before
+        2026-11-16 ignores, and by the free-text search, which also matches other invoices and other
+        columns. ePays does not list `udf3`: a payment created around the request is read, and
+        voided only if its own details are the invoice's. This listing is an older server's. """
+        invoice = 'INV/2026/00012'
+        request = self._unanswered('', udf3=invoice)
+        held = self._create_epays_transaction(state='pending')
+        requested_at = request.create_date.replace(tzinfo=timezone.utc)
+        near = requested_at + timedelta(seconds=20)
+        day = timedelta(days=1)
+
+        def item(payment_id, created_at=near, udf2=''):
+            return {'paymentId': payment_id, 'udf2': udf2, 'status': 'pending',
+                    'createdAt': created_at.isoformat(timespec='seconds')}
+
+        def detail(payment_id, **custom_fields):
+            data = {'paymentId': payment_id, 'status': 'pending'}
+            if custom_fields:
+                data['customFields'] = custom_fields
+            return data
+
+        calls = self._run_orphan_cron({'payments': [
+            item('ORPHAN'),
+            item('OTHER-INVOICE'),  # Its udf3 contains the invoice's.
+            item('NO-CUSTOM-FIELDS'),  # A server that does not report them.
+            item(held.provider_reference),  # A transaction holds it.
+            item('EARLIER', requested_at - day),  # Not this request's.
+            item('ORDER', udf2='S00001'),  # An order's payment.
+        ]}, details={
+            'ORPHAN': detail('ORPHAN', udf2='', udf3=invoice),
+            'OTHER-INVOICE': detail('OTHER-INVOICE', udf2='', udf3=f'{invoice}3'),
+            'NO-CUSTOM-FIELDS': detail('NO-CUSTOM-FIELDS'),
+        })
+
+        query = parse_qs(urlsplit(calls[0][1]).query)
+        self.assertEqual(query['status'], ['pending'])
+        self.assertEqual(query['udf3'], [invoice])
+        self.assertEqual(query['q'], [invoice])
+        self.assertNotIn('udf2', query)
+        self.assertEqual(query['fromDate'], [(requested_at - day).date().isoformat()])
+        self.assertEqual(query['toDate'], [(requested_at + day).date().isoformat()])
+        self.assertEqual(
+            [path for method, path in calls[1:] if method == 'GET'], [
+                '/api/v2/Payments/ORPHAN', '/api/v2/Payments/OTHER-INVOICE',
+                '/api/v2/Payments/NO-CUSTOM-FIELDS',
+            ], "Only a payment that may be the request's is read.",
+        )
+        self.assertEqual(
+            [path for method, path in calls if method != 'GET'],
+            ['/api/v2/Payments/ORPHAN', '/api/v2/Payments/ORPHAN/acknowledgement'],
+        )
+        self.assertFalse(request.exists(), "A handled request is forgotten.")
+
+    def test_a_server_listing_udf3_spares_the_reads_of_an_invoice_orphan(self):
+        """ ePays of 2026-11-16 lists `udf3` and filters by it exactly: the listed value is trusted
+        as `udf2` is, whenever the payment was created, and no payment is read. """
+        invoice = 'INV/2026/00014'
+        request = self._unanswered('', udf3=invoice)
+        earlier = request.create_date.replace(tzinfo=timezone.utc) - timedelta(hours=3)
+
+        def item(payment_id, udf3, udf2=''):
+            return {'paymentId': payment_id, 'udf2': udf2, 'udf3': udf3, 'status': 'pending',
+                    'createdAt': earlier.isoformat(timespec='seconds')}
+
+        calls = self._run_orphan_cron({'payments': [
+            item('ORPHAN', invoice),
+            item('OTHER-INVOICE', f'{invoice}3'),  # Matched by the search alone.
+            item('BARE-LINK', ''),
+            item('ORDER', invoice, udf2='S00001'),
+        ]}, details={})
+
+        self.assertEqual(
+            [(method, path) for method, path in calls if method != 'GET'], [
+                ('DELETE', '/api/v2/Payments/ORPHAN'),
+                ('POST', '/api/v2/Payments/ORPHAN/acknowledgement'),
+            ],
+        )
+        self.assertEqual(len([method for method, _path in calls if method == 'GET']), 1,
+                         "Only the list is read.")
+        self.assertFalse(request.exists())
+
+    def test_an_unanswered_request_needs_a_document_reference(self):
+        """ The cleanup lists a payment by `udf2` or `udf3`: a request with neither is refused. """
+        for udf2, udf3 in (('S00001', ''), ('', 'INV/2026/00015')):
+            self.assertTrue(self._unanswered(udf2, udf3=udf3))
+        with self.assertRaises(IntegrityError), mute_logger('odoo.sql_db'):
+            self._unanswered('', udf3=False)
+
+    def test_a_failed_read_of_an_invoice_orphan_voids_nothing(self):
+        """ The payments are all read before any is voided: the next run starts over. """
+        request = self._unanswered('', udf3='INV/2026/00013')
+        near = request.create_date.replace(tzinfo=timezone.utc) + timedelta(seconds=20)
+        listing = {'payments': [
+            {'paymentId': payment_id, 'udf2': '', 'status': 'pending',
+             'createdAt': near.isoformat(timespec='seconds')}
+            for payment_id in ('ORPHAN', 'UNREADABLE')
+        ]}
+        calls = self._run_orphan_cron(listing, details={
+            'ORPHAN': {'paymentId': 'ORPHAN', 'status': 'pending',
+                       'customFields': {'udf2': '', 'udf3': 'INV/2026/00013'}},
+            'UNREADABLE': EpaysApiError("ePays: unreachable"),
+        })
+        self.assertEqual([method for method, _path in calls], ['GET', 'GET', 'GET'])
+        self.assertTrue(request.exists(), "Retried by the next run.")
 
     def test_s24_an_orphan_in_flight_is_kept_until_epays_allows_the_void(self):
         """ S24: a refused orphan stays payable, so forgetting the request would leave it open. """

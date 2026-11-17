@@ -138,6 +138,7 @@ how each one is used.
 | `GET /api/v2/Payments/{id}` | Read a payment |
 | `GET /api/v2/Payments?limit=1` | Test connection |
 | `GET /api/v2/Payments?status=pending&udf2=…&limit=100` | Find orphans |
+| `GET /api/v2/Payments?status=pending&udf3=…&q=…&fromDate=…&toDate=…&limit=100` | Find the orphans of an invoice paid without order, confirmed by reading each one |
 | `DELETE /api/v2/Payments/{id}` | Void. Answers 409 `PAYMENT_IN_FLIGHT` while the customer may be paying |
 | `POST /api/v2/Payments/{id}/acknowledgement` | Mark as processed. Older servers answer 404 |
 | `GET /api/v2/gateways?limit=100&cursor=…` | Sync gateways, following `nextCursor` |
@@ -618,6 +619,7 @@ them.
       *`slow_3ds_answer`, alone on `18.0.1.0.8`.*
 - [x] A payment request answered too late, with its orphan voided.
       *ePays really created the payment; a test proxy held back only its answer. The orphan was voided, and the customer's own payment stayed open and paid the order. Verification run on `18.0.1.0.8`.*
+      *An invoice without sales order, the same way: the request was recorded with `udf3`, and the orphan found by the `udf3` filter, voided and acknowledged with no payment read, the retry left pending. Verification run on `18.0.1.0.9` against ePays `9dcfea9`.*
 - [x] Master key entered, saved, stored encrypted, and absent from pages and logs.
       *A random canary typed into the form: stored with `epays1:`, and absent from the page source, every response, the server log and a full database dump. Verification run on `18.0.1.0.8`.*
 - [x] Install on a fresh site from the release package.

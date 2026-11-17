@@ -64,6 +64,19 @@ hold it there.
 - [x] **18.0.1.0.8 end to end** on the local ePays API: the 12 items of Part 4 in `CHECKLIST_ODOO.md`,
       on tag `18.0.1.0.8` (`a982653`), 102 checks, and installed on a fresh site from its package.
 - [ ] **18.0.1.0.8 on real gateways**: the items below it.
+- [x] **18.0.1.0.9 on the local ePays API** (2026-11-16, ePays `9dcfea9`, listing `udf3` since
+      `5e2dc01`): an invoice without sales order paid through Odoo, its payment request answered too
+      late by a test proxy (ePays created the payment, Odoo timed out after 30 s and recorded the
+      request with `udf3`). The retry created a new payment; the scheduled check made one list call
+      (`udf3`, `q`, date window), read no payment, voided and acknowledged the orphan, and left the
+      retry pending. The list alone: `udf3` returns only the invoice's payment, `q` alone also
+      `INV/…3`, as an older server would.
+- [x] **Upgrade from 18.0.1.0.8** (2026-11-16, with sales and accounting, one filestore throughout):
+      `-u payment_epays` runs without warning, adds `udf3` and replaces `udf2`'s NOT NULL with a
+      check that `udf2` or `udf3` is set (a row with neither is refused). The
+      provider settings, both master keys (encrypted by 18.0.1.0.8, still read) and an order's
+      unanswered request survive; an invoice's request is then recorded with no `udf2`. 286 tests
+      pass on the upgraded database.
 - [ ] A **real card payment** typed into the ePays page in a browser, up to the confirmed order and
       the posted payment. The sandbox's test card went through on `6c715d0`; a real card has not.
 - [x] A **declined** payment, then a successful retry, on the sandbox on `6c715d0`.
@@ -148,6 +161,12 @@ For every shop that uses the addon:
       merchant clicks *Check ePays Status*. Who at ePays runs that reconciliation, and when?
 - [ ] **An encryption key on Odoo.sh**: without `odoo.conf` access, the keys are encrypted with
       `database.secret`. Is an environment variable available there?
+- [ ] **Orphan cleanup reads one page**: `_epays_list_pending_payments` takes the first 100 pending
+      payments and does not follow `nextCursor`, for orders and invoices alike. The exact `udf2` and
+      `udf3` filters keep that list short; a server before 2026-11-16 ignores `udf3`, and its `q`
+      also matches other invoices, so a busy merchant can push an invoice's orphan past the page. It
+      is then given up after `UNANSWERED_REQUEST_MAX_AGE` and expires unpaid, as nobody has its link.
+      Follow `nextCursor` as the gateway sync does (up to 10 pages) if that matters.
 
 ## 6. WooCommerce parity after the 18.0.1.0.8 audit
 

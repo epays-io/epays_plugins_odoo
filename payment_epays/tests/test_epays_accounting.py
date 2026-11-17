@@ -947,6 +947,41 @@ if AccountPaymentCommon is not None:
                 tx._post_process()
                 self._run_commit_hooks()  # Does not raise.
 
+        @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER,
+                     'odoo.addons.payment_epays.models.payment_epays_unanswered_request')
+        def test_a_payment_request_answered_too_late_is_recorded_for_its_invoices(self):
+            bhd = self._prepare_currency('BHD')  # Charged as is: no exchange rate needed.
+            invoice = self.init_invoice(
+                'out_invoice', partner=self.partner, amounts=[137.0], post=True, currency=bhd,
+            )
+            tx = self._create_transaction(
+                'redirect', reference=False, amount=invoice.amount_total, currency_id=bhd.id,
+                invoice_ids=[Command.set(invoice.ids)],
+            )
+
+            def handler(provider, method, path, **kwargs):
+                raise EpaysApiError(
+                    "ePays: unreachable", connection_error="Read timed out.", timed_out=True
+                )
+
+            def pay_and_fail():
+                """ Not `assertRaises`: Odoo's rolls back the database changes of its block, and
+                the request is recorded precisely to survive the rollback of a failed payment. """
+                with self._patch_make_request(handler):
+                    try:
+                        tx._get_processing_values()
+                    except ValidationError:
+                        return
+                self.fail("The payment request did not fail.")
+
+            pay_and_fail()
+            request = self.env['payment.epays.unanswered.request'].search([
+                ('reference', '=', tx.reference),
+            ])
+            self.assertEqual(len(request), 1)
+            self.assertFalse(request.udf2)
+            self.assertEqual(request.udf3, invoice.name)
+
         @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER, PROVIDER_LOGGER)
         def test_portal_invoice_payment(self):
             invoice = self.init_invoice(
