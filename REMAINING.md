@@ -161,6 +161,12 @@ For every shop that uses the addon:
       merchant clicks *Check ePays Status*. Who at ePays runs that reconciliation, and when?
 - [ ] **An encryption key on Odoo.sh**: without `odoo.conf` access, the keys are encrypted with
       `database.secret`. Is an environment variable available there?
+- [ ] **Orphan cleanup reads one page**: `_epays_list_pending_payments` takes the first 100 pending
+      payments and does not follow `nextCursor`, for orders and invoices alike. The exact `udf2` and
+      `udf3` filters keep that list short; a server before 2026-11-16 ignores `udf3`, and its `q`
+      also matches other invoices, so a busy merchant can push an invoice's orphan past the page. It
+      is then given up after `UNANSWERED_REQUEST_MAX_AGE` and expires unpaid, as nobody has its link.
+      Follow `nextCursor` as the gateway sync does (up to 10 pages) if that matters.
 
 ## 6. WooCommerce parity after the 18.0.1.0.8 audit
 
