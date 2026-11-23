@@ -77,6 +77,13 @@ hold it there.
       provider settings, both master keys (encrypted by 18.0.1.0.8, still read) and an order's
       unanswered request survive; an invoice's request is then recorded with no `udf2`. 286 tests
       pass on the upgraded database.
+- [x] **18.0.1.0.10** (2026-11-23): a random `Idempotency-Key` per payment request, after a live
+      shop on 18.0.1.0.3 had every click refused with 409 `IDEMPOTENCY_CONFLICT` for 24 hours once
+      a request timed out. 289 tests with sales and accounting, 239 alone. `e2e/` on the local
+      ePays API and the sandbox: the click after a timed-out request pays and confirms the order,
+      18.0.1.0.3 reproduces the 409 on both. `-u payment_epays` from 18.0.1.0.9 runs without
+      warning. MPGS's test merchant blocked the fresh-order approved-card test by its risk rules;
+      approved payments passed in the decline-and-retry and timeout tests.
 - [ ] A **real card payment** typed into the ePays page in a browser, up to the confirmed order and
       the posted payment. The sandbox's test card went through on `6c715d0`; a real card has not.
 - [x] A **declined** payment, then a successful retry, on the sandbox on `6c715d0`.

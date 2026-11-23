@@ -67,9 +67,8 @@ npm test
 
 The shops reach the sandbox through an HTTPS proxy in their container, which holds answers as the
 forwarder does. Not checked there: the orphan cleanup (the sandbox's payment list ignores `status`
-and `udf2`, so the addon cannot tell its orphans) and acknowledgements (the sandbox has no such
-endpoint, which the addon only logs). Its notifications cannot reach `127.0.0.1`: the browser's
-return confirms the payments.
+and `udf2`, so the addon cannot tell its orphans). Acknowledgements reach it (HTTP 200 since
+2026-11-23). Its notifications cannot reach `127.0.0.1`: the browser's return confirms the payments.
 
 `shops.py up` starts Postgres and the shops in Docker (`epays-e2e-*`), installs `website_sale`,
 `account_payment` and the addon with demo data, and configures the ePays provider for the local API

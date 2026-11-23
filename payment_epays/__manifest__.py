@@ -2,7 +2,7 @@
 
 {
     'name': 'ePays Payment Provider',
-    'version': '18.0.1.0.9',
+    'version': '18.0.1.0.10',
     'category': 'Accounting/Payment Providers',
     'sequence': 350,
     'summary': "Cards, Benefit, BenefitPay, Apple Pay, Google Pay, Samsung Pay and Tabby through "

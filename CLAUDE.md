@@ -37,6 +37,10 @@ docker run --rm --network epays-net -e HOST=epays-pg -e USER=odoo -e PASSWORD=od
 - Translations: after changing a user-facing string, re-export `payment_epays/i18n/payment_epays.pot`
   (`odoo -d test --i18n-export=/mnt/extra-addons/payment_epays/i18n/payment_epays.pot --modules=payment_epays --stop-after-init`)
   and merge into `i18n/ar.po` (e.g. `msgmerge`).
+- End to end (`e2e/README.md`): a real shop in Chrome against the local ePays API and MPGS's test
+  cards, local only, never in CI. `cd e2e && npm install && python scripts/shops.py up`, then
+  `npm test` (`up --with-18.0.1.0.3` and `npm run test:18.0.1.0.3` reproduce that version's 409);
+  `python scripts/shops.py down` removes the shops. `e2e/` is outside the addon and its zip.
 - Release zip, from the tagged commit, without tests: `zip -r dist/payment_epays-<version>.zip payment_epays -x '*/__pycache__/*' '*.pyc' '*/tests/*'`.
 
 ## Architecture
@@ -73,8 +77,9 @@ early for other providers.
      filters and lists `udf3` since 2026-11-16, and the listed value is trusted as `udf2` is. An
      older server ignores the filter, its `q` matches other invoices too, and it lists no `udf3`:
      only payments created around the request are read there
-     (`UNANSWERED_REQUEST_CREATION_MARGIN`) and voided if their own `udf3` is the invoice's. Each attempt has its own
-     idempotency key (`_epays_get_idempotency_key`): the rolled-back reference comes back. Tests
+     (`UNANSWERED_REQUEST_CREATION_MARGIN`) and voided if their own `udf3` is the invoice's. Each request has its own
+     random idempotency key (`_epays_get_idempotency_key`): a rolled-back reference, and a
+     restored or copied database, would repeat a derived one (409 `IDEMPOTENCY_CONFLICT`). Tests
      for it cannot use Odoo's `assertRaises`, which rolls the separate cursor's write back too.
   6. `_post_process` registers a commit hook, `_epays_close_on_epays`, because `account_payment`
      wraps this override: the accounting payment does not exist yet when it runs. The hook runs in

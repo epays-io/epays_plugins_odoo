@@ -26,11 +26,11 @@ them to your server.
 
 ### 1. Put the module on the server
 
-From the release zip (`payment_epays-18.0.1.0.8.zip`):
+From the release zip (`payment_epays-18.0.1.0.10.zip`):
 
 ```sh
 sudo mkdir -p /opt/odoo/custom-addons
-sudo unzip payment_epays-18.0.1.0.8.zip -d /opt/odoo/custom-addons
+sudo unzip payment_epays-18.0.1.0.10.zip -d /opt/odoo/custom-addons
 sudo chown -R odoo:odoo /opt/odoo/custom-addons
 ls /opt/odoo/custom-addons/payment_epays/__manifest__.py    # must exist
 ```
@@ -74,7 +74,7 @@ Check the result:
 ```sh
 sudo -u odoo psql -d <database> -c \
     "SELECT name, state, latest_version FROM ir_module_module WHERE name = 'payment_epays';"
-# payment_epays | installed | 18.0.1.0.8
+# payment_epays | installed | 18.0.1.0.10
 ```
 
 **ePays not under Payment Providers?** Odoo lists only the providers of the company selected in
@@ -94,7 +94,7 @@ on its addons path, then install:
 
 ```sh
 # docker-compose.yml, service odoo:  volumes: ["./addons:/mnt/extra-addons"]
-mkdir -p addons && unzip payment_epays-18.0.1.0.8.zip -d addons
+mkdir -p addons && unzip payment_epays-18.0.1.0.10.zip -d addons
 docker compose run --rm odoo odoo -d <database> -i website_sale,account_payment,payment_epays \
     --stop-after-init
 docker compose restart odoo
@@ -110,7 +110,7 @@ Add the module to your Odoo.sh project repository and push; Odoo.sh builds the b
 ```sh
 git clone git@github.com:<you>/<odoo-sh-project>.git && cd <odoo-sh-project>
 git checkout <staging-branch>
-unzip /path/to/payment_epays-18.0.1.0.8.zip -d .       # the module folder at the root
+unzip /path/to/payment_epays-18.0.1.0.10.zip -d .       # the module folder at the root
 git add payment_epays
 git commit -m "Add the ePays payment provider"
 git push
@@ -124,7 +124,7 @@ builds are neutralised: their ePays master keys are cleared, so enter sandbox ke
 ### Windows (Odoo installer)
 
 ```powershell
-Expand-Archive .\payment_epays-18.0.1.0.8.zip -DestinationPath "C:\odoo\custom-addons"
+Expand-Archive .\payment_epays-18.0.1.0.10.zip -DestinationPath "C:\odoo\custom-addons"
 # add C:\odoo\custom-addons to addons_path in "C:\Program Files\Odoo 18.0\server\odoo.conf"
 Restart-Service odoo-server-18.0      # the service name may differ; see services.msc
 ```
@@ -159,7 +159,7 @@ version would stay behind):
 
 ```sh
 sudo rm -rf /opt/odoo/custom-addons/payment_epays
-sudo unzip payment_epays-18.0.1.0.8.zip -d /opt/odoo/custom-addons
+sudo unzip payment_epays-18.0.1.0.10.zip -d /opt/odoo/custom-addons
 sudo chown -R odoo:odoo /opt/odoo/custom-addons/payment_epays
 ```
 
@@ -172,14 +172,14 @@ sudo -u odoo git -C /opt/odoo/epays_plugins_odoo pull
 **Docker**, replace the folder mounted on `/mnt/extra-addons`:
 
 ```sh
-rm -rf addons/payment_epays && unzip payment_epays-18.0.1.0.8.zip -d addons
+rm -rf addons/payment_epays && unzip payment_epays-18.0.1.0.10.zip -d addons
 ```
 
 **Windows**:
 
 ```powershell
 Remove-Item -Recurse -Force "C:\odoo\custom-addons\payment_epays"
-Expand-Archive .\payment_epays-18.0.1.0.8.zip -DestinationPath "C:\odoo\custom-addons"
+Expand-Archive .\payment_epays-18.0.1.0.10.zip -DestinationPath "C:\odoo\custom-addons"
 ```
 
 **Odoo.sh**, replace the folder in your project repository and push; because the new version has
@@ -187,7 +187,7 @@ a higher `version`, Odoo.sh updates the module on its own when it builds the bra
 
 ```sh
 cd <odoo-sh-project>
-git rm -r -q payment_epays && unzip /path/to/payment_epays-18.0.1.0.8.zip -d .
+git rm -r -q payment_epays && unzip /path/to/payment_epays-18.0.1.0.10.zip -d .
 git add payment_epays && git commit -m "Update the ePays payment provider to 18.0.1.0.8" && git push
 ```
 
@@ -253,6 +253,7 @@ sudo systemctl start odoo
 
 | Version | Changes | Update notes |
 |---|---|---|
+| 18.0.1.0.10 | Each payment request has its own random key, so a request ePays answered too late can no longer block the next clicks with 409 `IDEMPOTENCY_CONFLICT` | No data change. Shops still on 18.0.1.0.3 should update: their customers can be refused for 24 hours after a slow answer. |
 | 18.0.1.0.9 | A payment ePays creates after Odoo stopped waiting is voided for invoices paid without sales order too, not only for orders | Run the update: it adds a column to `payment_epays_unanswered_request`. |
 | 18.0.1.0.8 | The audit fixes in [CHANGELOG.md](CHANGELOG.md): a held or refused charge is never recorded afterwards, two clicks cannot create two payments, failed ePays reads count towards the public limit, staff who can edit an order can release it | Run the update: it adds columns to `payment_transaction`. Charges already refused are marked as such. |
 | 18.0.1.0.7 | Master keys encrypted in the database; same payment logic as the WooCommerce plugin | Needs the Python `cryptography` package, which the official `odoo:18` image includes. Set `epays_encryption_key` in `odoo.conf` before updating if you want your own key: changing it later means entering the master keys again. |

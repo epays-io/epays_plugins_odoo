@@ -62,7 +62,13 @@ follow this checklist where they differ from it.
 
 ### Known gaps in the existing integrations
 
-None known on 2026-11-06.
+On 2026-11-22:
+
+| Integration | Gap | Effect | Fixed in |
+|---|---|---|---|
+| Odoo 18.0.1.0.3 | The `Idempotency-Key` was built from the transaction reference, which returns after a rollback | After a payment request timed out, ePays refused every click on that order with 409 `IDEMPOTENCY_CONFLICT` for 24 hours. Seen on a live shop. Shops on 18.0.1.0.3 must upgrade | 18.0.1.0.4 (transaction id in the key); a random key in the next release |
+| WooCommerce 1.0.0 | The key is built from `home_url`, the order id and the attempt counter (section 3.5) | A site restored from a backup, or a copy keeping the live URL and keys, can repeat a key the original sent in the last 24 hours, and gets 409 on that click. Not seen on a live shop | Not yet: a random key in the next release |
+| Odoo 18.0.1.0.9, WooCommerce 1.0.0 | The orphan cleanup takes every pending payment with the order's reference (`udf2`) that no attempt of this shop holds (section 3.5) | Two shops on one API id with the same order number: each voids the other's pending payments. Seen in the end-to-end run of 2026-11-23, where one test shop voided the other's orphan. A live payment would be voided too, unless the customer is already at the bank. A neutralised Odoo copy is safe: its keys are cleared | Not yet: also compare `notifyUrl` with the shop's own return address |
 
 ## Terms
 
@@ -158,6 +164,7 @@ how each one is used.
 | Unanswered request | Cleaned up from 2 min, given up after 1 day |
 | Public reads | 5 per 60 s |
 | Payment id format | `^[A-Za-z0-9_-]{1,64}$` |
+| `Idempotency-Key` | `^[A-Za-z0-9_-]{1,64}$`, kept by ePays for 24 h per API id |
 | `description`, line texts, `udf2`, `udf3` | 255 characters |
 | Reference list | Joined with `, `, cut at a whole reference, ending in `…` |
 | Exchange rate is stale after | 7 days |
@@ -314,8 +321,17 @@ Read from `error.details.reason`, and turn each into a clear message for the adm
 
 **The request itself**
 
-- [ ] Each attempt has its own `Idempotency-Key`, and one attempt sends one key. A key built from
-      something that returns after a rollback gets 409 `IDEMPOTENCY_CONFLICT` on every click.
+- [ ] Each attempt has its own `Idempotency-Key`, and one attempt sends one key. ePays keeps a key
+      for 24 hours per API id and compares the request's fields, `expiryDate` among them, so a key
+      sent again with a new request gets 409 `IDEMPOTENCY_CONFLICT`.
+- [ ] The key is random, or comes from a counter saved before the request that nothing rolls back.
+      It is never built only from the order id, order reference, transaction reference or site:
+      a rollback brings a reference back, and a restored backup or a copied site brings back ids,
+      references and counters. Odoo 18.0.1.0.3 built it from the transaction reference: after a
+      payment request timed out, ePays refused every click on that order for 24 hours
+      (2026-11-22).
+- [ ] A failed request is never resent with a changed field under the same key. An integration
+      that does not resend at all makes a new attempt, with a new key, on the next click.
 - [ ] `paymentId` and `redirect` are checked. `redirect` must be HTTPS on the host of the mode's API.
 - [ ] Stored on the attempt: payment id, environment, domain, expiry, charged amount, currency, rate,
       `udf2`, `udf3`, language, chosen gateway, and the document total if the platform cannot
@@ -324,6 +340,11 @@ Read from `error.details.reason`, and turn each into a clear message for the adm
 - [ ] **Timeout:** ePays may still create the payment. The request is recorded so that it survives any
       rollback, and the scheduler voids that reference's pending payments that no attempt holds, once
       no click can still be waiting for it. A void that is refused keeps the record (S24).
+- [ ] An orphan is voided only if it is this shop's: its `notifyUrl` is the return address this shop
+      sends. A reference is not enough: two shops on one API id number their orders alike, e.g. a
+      production site and a copy of it on the same keys, and each would void the other's payments,
+      including one a customer is about to pay. The test: a pending payment with the same reference
+      and another shop's `notifyUrl` is not voided.
 
 ### 3.6 Return, notification and reading status
 
@@ -599,7 +620,8 @@ them.
       replacement pays.
 - [ ] Document cancelled with an open link, also at 3-D Secure (S8).
 - [ ] A slow 3-D Secure answer.
-- [ ] A payment request answered too late, with its orphan voided.
+- [ ] A payment request answered too late, with its orphan voided, and the next click on the same
+      order reaching the payment page.
 - [ ] Master key entered, saved, stored encrypted, and absent from pages and logs.
 - [ ] Install on a fresh site from the release package.
 

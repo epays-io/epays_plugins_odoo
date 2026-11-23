@@ -64,7 +64,13 @@ follow this checklist where they differ from it.
 
 ### Known gaps in the existing integrations
 
-None known on 2026-11-06.
+On 2026-11-23:
+
+| Integration | Gap | Effect | Fixed in |
+|---|---|---|---|
+| Odoo 18.0.1.0.3 | The `Idempotency-Key` was built from the transaction reference, which returns after a rollback | After a payment request timed out, ePays refused every click on that order with 409 `IDEMPOTENCY_CONFLICT` for 24 hours. Seen on a live shop, reproduced end to end. Shops on 18.0.1.0.3 must upgrade | 18.0.1.0.4 (transaction id in the key); a random key in the next release |
+| WooCommerce 1.0.0 | The key is built from `home_url`, the order id and the attempt counter (section 3.5) | A site restored from a backup, or a copy keeping the live URL and keys, can repeat a key the original sent in the last 24 hours, and gets 409 on that click. Not seen on a live shop | Not yet: a random key in the next release |
+| Odoo 18.0.1.0.9, WooCommerce 1.0.0 | The orphan cleanup takes every pending payment with the order's reference (`udf2`) that no attempt of this shop holds (section 3.5) | Two shops on one API id with the same order number: each voids the other's pending payments. Seen in the end-to-end run of 2026-11-23. A live payment would be voided too, unless the customer is already at the bank. A neutralised Odoo copy is safe: its keys are cleared | Not yet: also compare `notifyUrl` with the shop's own return address |
 
 ## Terms
 
@@ -161,6 +167,7 @@ how each one is used.
 | Unanswered request | Cleaned up from 2 min, given up after 1 day |
 | Public reads | 5 per 60 s |
 | Payment id format | `^[A-Za-z0-9_-]{1,64}$` |
+| `Idempotency-Key` | `^[A-Za-z0-9_-]{1,64}$`, kept by ePays for 24 h per API id |
 | `description`, line texts, `udf2`, `udf3` | 255 characters |
 | Reference list | Joined with `, `, cut at a whole reference, ending in `…` |
 | Exchange rate is stale after | 7 days |
@@ -318,8 +325,23 @@ Read from `error.details.reason`, and turn each into a clear message for the adm
 
 **The request itself**
 
-- [x] Each attempt has its own `Idempotency-Key`, and one attempt sends one key. A key built from
-      something that returns after a rollback gets 409 `IDEMPOTENCY_CONFLICT` on every click.
+- [x] Each attempt has its own `Idempotency-Key`, and one attempt sends one key. ePays keeps a key
+      for 24 hours per API id and compares the request's fields, `expiryDate` among them, so a key
+      sent again with a new request gets 409 `IDEMPOTENCY_CONFLICT`.
+- [x] The key is random, or comes from a counter saved before the request that nothing rolls back.
+      It is never built only from the order id, order reference, transaction reference or site:
+      a rollback brings a reference back, and a restored backup or a copied site brings back ids,
+      references and counters. Odoo 18.0.1.0.3 built it from the transaction reference: after a
+      payment request timed out, ePays refused every click on that order for 24 hours
+      (2026-11-22).
+      *`_epays_get_idempotency_key`: a random UUID per request since 18.0.1.0.10
+      (18.0.1.0.4 to 18.0.1.0.9 add the transaction id to Odoo's key, which a restored database
+      repeats). `test_a_restored_database_sends_a_new_idempotency_key`,
+      `test_an_idempotency_conflict_does_not_block_the_next_click`.*
+- [x] A failed request is never resent with a changed field under the same key. An integration
+      that does not resend at all makes a new attempt, with a new key, on the next click.
+      *Odoo never resends: a failed request rolls its transaction back, and the next click makes a
+      new one.*
 - [x] `paymentId` and `redirect` are checked. `redirect` must be HTTPS on the host of the mode's API.
 - [x] Stored on the attempt: payment id, environment, domain, expiry, charged amount, currency, rate,
       `udf2`, `udf3`, language, chosen gateway, and the document total if the platform cannot
@@ -328,6 +350,14 @@ Read from `error.details.reason`, and turn each into a clear message for the adm
 - [x] **Timeout:** ePays may still create the payment. The request is recorded so that it survives any
       rollback, and the scheduler voids that reference's pending payments that no attempt holds, once
       no click can still be waiting for it. A void that is refused keeps the record (S24).
+- [ ] An orphan is voided only if it is this shop's: its `notifyUrl` is the return address this shop
+      sends. A reference is not enough: two shops on one API id number their orders alike, e.g. a
+      production site and a copy of it on the same keys, and each would void the other's payments,
+      including one a customer is about to pay. The test: a pending payment with the same reference
+      and another shop's `notifyUrl` is not voided.
+      *Open: `_epays_is_for_documents` compares `udf2` (or `udf3`) only. Found in the end-to-end run
+      of 2026-11-23: two test shops on one merchant, and one voided the other's orphan of order
+      S00039. A neutralised copy is safe, as its keys are cleared.*
 
 ### 3.6 Return, notification and reading status
 
@@ -598,6 +628,10 @@ Run in a browser on the final code, against the sandbox or a local ePays API. A 
 does not count. Items marked *newer server* need an ePays API with `inFlight`: ask ePays where to test
 them.
 
+*Since 2026-11-23 part of the repository: `e2e/` (Playwright, local ePays API, MPGS test cards) runs
+the approved payment, decline and retry, Back and Pay again, and the request answered too late, and
+reproduces 18.0.1.0.3's 409. The other items below were run by hand.*
+
 - [x] Payment approved, in each checkout type.
       *Shop, order payment link, portal order and invoice. Verification run on `18.0.1.0.8`.*
 - [x] Declined, then retried on the same document (S4).
@@ -617,7 +651,15 @@ them.
       *`cancelled_order_open_link` and `cancelled_during_3ds`, alone on `18.0.1.0.8`.*
 - [x] A slow 3-D Secure answer.
       *`slow_3ds_answer`, alone on `18.0.1.0.8`.*
-- [x] A payment request answered too late, with its orphan voided.
+- [x] A payment request answered too late, with its orphan voided, and the next click on the same
+      order reaching the payment page.
+      *2026-11-23, local ePays API, the random key of 18.0.1.0.10: the first click timed out after
+      30 s (ePays created the payment, a test proxy held its answer); the next click reached the
+      ePays page, the card paid through 3-D Secure, the order was confirmed and the orphan voided by
+      the scheduled check. The same run on 18.0.1.0.3 reproduced the live failure: every next click
+      got 409 `IDEMPOTENCY_CONFLICT`. On the sandbox the same day, `e2e/` up to the confirmed order
+      and its acknowledgement (HTTP 200), S1, S4 and S5 pass, and 18.0.1.0.3 gets the 409 there
+      too; the orphan cleanup is not checked there, as its payment list ignores the filters.*
       *ePays really created the payment; a test proxy held back only its answer. The orphan was voided, and the customer's own payment stayed open and paid the order. Verification run on `18.0.1.0.8`.*
       *An invoice without sales order, the same way: the request was recorded with `udf3`, and the orphan found by the `udf3` filter, voided and acknowledged with no payment read, the retry left pending. Verification run on `18.0.1.0.9` against ePays `9dcfea9`.*
 - [x] Master key entered, saved, stored encrypted, and absent from pages and logs.
