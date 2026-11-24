@@ -2,6 +2,14 @@
 
 Each version is for Odoo 18.0. Update notes are in [README.md](README.md#version-history).
 
+## 18.0.1.0.10
+
+- Each payment request sends a new random `Idempotency-Key`. ePays keeps a key for 24 hours and
+  refuses it, with 409 `IDEMPOTENCY_CONFLICT`, on a request with other fields. 18.0.1.0.3 built the
+  key from the transaction reference, which comes back after a request that timed out: ePays then
+  refused every click on that order for 24 hours, and the customer could not pay. 18.0.1.0.4 to
+  18.0.1.0.9 added the transaction id, which a restored backup or a copied database still repeats.
+
 ## 18.0.1.0.9
 
 - A payment ePays creates after Odoo stopped waiting for its answer is now voided for an invoice

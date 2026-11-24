@@ -19,7 +19,6 @@ from odoo.modules import neutralize
 from odoo.tests import tagged
 from odoo.tools import config, is_html_empty, mute_logger
 
-from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment.const import REPORT_REASONS_MAPPING
 from odoo.addons.payment.controllers.post_processing import PaymentPostProcessing
 from odoo.addons.payment.tests.http_common import PaymentHttpCommon
@@ -91,9 +90,8 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(call['path'], '/api/v2/Payments')
         self.assertEqual(call['environment'], 'sandbox')
         self.assertEqual(call['domain'], 'shop.example.com')
-        self.assertEqual(
-            call['idempotency_key'],
-            payment_utils.generate_idempotency_key(tx, scope=f'payment_request_epays_{tx.id}'),
+        self.assertRegex(
+            call['idempotency_key'], r'^[A-Za-z0-9_-]{1,64}$', "The format ePays accepts."
         )
         self.assertEqual(payload['amount'], '137.000', "The amount is a string at 3 decimals.")
         self.assertEqual(payload['currency'], 'BHD')
@@ -158,6 +156,42 @@ class EpaysTest(EpaysCommon, PaymentHttpCommon):
         self.assertEqual(len(keys), 2)
         self.assertNotEqual(keys[0], keys[1])
         self.assertEqual(tx.provider_reference, self.payment_id)
+
+    @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
+    def test_an_idempotency_conflict_does_not_block_the_next_click(self):
+        """ ePays refused the key (409 IDEMPOTENCY_CONFLICT): the customer is told it failed, and
+        the next click sends another key and reaches the payment page. """
+        keys = []
+
+        def handler(provider, method, path, **kwargs):
+            keys.append(kwargs['idempotency_key'])
+            if len(keys) == 1:
+                raise EpaysApiError(
+                    "ePays: Could not establish the connection to the API.", http_status=409,
+                    error_code='IDEMPOTENCY_CONFLICT',
+                )
+            return {'paymentId': self.payment_id, 'redirect': self.redirect_url}
+
+        with self._patch_make_request(handler):
+            with self.assertRaises(ValidationError), self.env.cr.savepoint():
+                self._create_transaction('redirect', reference='S00075-1')._get_processing_values()
+            self.env.invalidate_all()
+            tx = self._create_transaction('redirect', reference='S00075-1')
+            values = tx._get_processing_values()
+
+        self.assertEqual(len(keys), 2)
+        self.assertNotEqual(keys[0], keys[1])
+        self.assertEqual(tx.provider_reference, self.payment_id)
+        self.assertTrue(values.get('redirect_form_html'))
+
+    @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
+    def test_a_restored_database_sends_a_new_idempotency_key(self):
+        """ A restored backup or a copied database repeats the database UUID, the references and
+        the record ids. The same transaction asking again must not send the key of the payment the
+        original database created with other fields, or ePays refuses every click (409
+        IDEMPOTENCY_CONFLICT) for 24 hours. """
+        tx = self._create_transaction('redirect', reference=self._new_reference())
+        self.assertNotEqual(tx._epays_get_idempotency_key(), tx._epays_get_idempotency_key())
 
     @mute_logger(TX_LOGGER, PAYMENT_TX_LOGGER)
     def test_payment_request_gateway_id_per_method(self):

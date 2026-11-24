@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import time
+import uuid
 from datetime import timedelta
 from urllib.parse import parse_qsl, quote, urlsplit
 
@@ -17,7 +18,6 @@ from odoo.http import request
 from odoo.tools import SQL
 from odoo.tools.lru import LRU
 
-from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment_epays import const
 from odoo.addons.payment_epays import utils as epays_utils
 from odoo.addons.payment_epays.controllers.main import EpaysController
@@ -495,25 +495,20 @@ class PaymentTransaction(models.Model):
                 ))
 
     def _epays_get_idempotency_key(self):
-        """ Return the idempotency key of the payment request of this attempt.
+        """ Return a new idempotency key for the payment request of this attempt.
 
-        Odoo's key is made from the transaction reference, and a reference comes back after a
-        rollback: when ePays answers too late, the request fails, the transaction is rolled back
-        and the customer's next click creates one with the same reference. If ePays created the
-        payment anyway, that next request carries the same key with a new expiry, and ePays
-        refuses it (409 IDEMPOTENCY_CONFLICT) on every click until the key expires. The record id
-        comes from a sequence that a rollback does not rewind, so each attempt has its own key,
-        while one attempt still sends one key.
-
-        Note: self.ensure_one()
+        ePays reserves a key for 24 hours per API id and refuses it on a request with other fields
+        (409 IDEMPOTENCY_CONFLICT), e.g. another expiry. A key derived from the transaction comes
+        back: Odoo's is made from the database UUID and the reference, which come back after a
+        rollback (a reference) or in a restored backup or a copied database (both, with the same
+        record ids). The customer's request then fails on every click. A random key never comes
+        back, and nothing needs it to: the addon never resends a payment request, as one that fails
+        is rolled back with its transaction.
 
         :return: The idempotency key.
         :rtype: str
         """
-        self.ensure_one()
-        return payment_utils.generate_idempotency_key(
-            self, scope=f'payment_request_epays_{self.id}'
-        )
+        return uuid.uuid4().hex
 
     @api.model
     def _epays_get_redirect_values(self, redirect_url):

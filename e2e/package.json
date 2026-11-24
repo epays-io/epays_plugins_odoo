@@ -1,0 +1,21 @@
+{
+  "name": "payment-epays-e2e",
+  "private": true,
+  "description": "End-to-end tests of the payment_epays addon in an Odoo 18 shop, against the local ePays API and MPGS's test environment. Local only, see README.md.",
+  "scripts": {
+    "shops:up": "python scripts/shops.py up",
+    "shops:up:all": "python scripts/shops.py up --with-18.0.1.0.3",
+    "shops:down": "python scripts/shops.py down",
+    "test": "playwright test --project=current",
+    "test:no-card": "playwright test --project=current --grep-invert @card",
+    "test:18.0.1.0.3": "playwright test --project=v18.0.1.0.3",
+    "test:all": "playwright test",
+    "report": "playwright show-report",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.15.21",
+    "typescript": "7.0.2"
+  }
+}

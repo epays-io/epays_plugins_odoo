@@ -18,6 +18,8 @@ repos:
       # Store-blocking checks: manifest keys, licence, version format, missing README, etc.
       - id: pylint_odoo
         name: pylint-odoo (manifest and mandatory checks)
+        # Odoo's rules are for the addon: e2e/ holds command-line tools that print.
+        files: ^payment_epays/
         args:
           - --rcfile=.pylintrc-mandatory
           - --valid-odoo-versions=18.0
